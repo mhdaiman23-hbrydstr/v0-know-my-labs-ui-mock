@@ -1,166 +1,210 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { z } from "zod"
-import Anthropic from "@anthropic-ai/sdk"
+import { NextRequest, NextResponse } from 'next/server';
+import { AnthropicClient } from '@anthropic-ai/sdk';
 
-export const runtime = "nodejs"
+// Initialize Anthropic client
+const anthropic = new AnthropicClient({
+  apiKey: process.env.ANTHROPIC_API_KEY || '',
+});
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-
-const Req = z.object({
-  demographics: z.object({
-    sex: z.enum(["male", "female", "intersex", "unspecified"]),
-    ageYears: z.number().min(0).max(120),
-    ethnicity: z.string().optional(),
-    units: z.enum(["SI", "US"]),
-    fasting: z.boolean().optional(),
-    testDate: z.string().optional(),
-  }),
-  context: z
-    .object({
-      conditions: z.array(z.string()).optional(),
-      medications: z.array(z.string()).optional(),
-      lifestyle: z.array(z.string()).optional(),
-    })
-    .optional(),
-  labs: z
-    .array(
-      z.object({
-        panel: z.string(),
-        code: z.string(),
-        name: z.string(),
-        value_si: z.number(), // SI required
-        unit_si: z.string(),
-      }),
-    )
-    .min(1),
-})
-
-// Desired response shape (for the model & for our parse)
-const ResponseHint = {
-  summary: "string",
-  flags: [{ code: "string", name: "string", severity: "low|high|critical|note", rationale: "string" }],
-  considerations: ["string"],
-  lifestyle: ["string"],
-  questionsForDoctor: ["string"],
-  safetyNotice: "string",
-}
-
-const Resp = z.object({
-  summary: z.string(),
-  flags: z.array(
-    z.object({
-      code: z.string(),
-      name: z.string(),
-      severity: z.enum(["low", "high", "critical", "note"]),
-      rationale: z.string(),
-    }),
-  ),
-  considerations: z.array(z.string()),
-  lifestyle: z.array(z.string()),
-  questionsForDoctor: z.array(z.string()),
-  safetyNotice: z.string(),
-})
-
-const SYSTEM_PROMPT = `
-You are a cautious educational assistant for lab results.
-- Do NOT diagnose, treat, or prescribe.
-- Use only the provided demographics and lab markers; do not invent reference ranges.
-- Explain in clear, plain English and keep it scannable.
-- Always include a safety disclaimer telling users to consult a clinician.
-- Return ONLY valid JSON matching the schema provided. No extra text.
-`
-
-function groupLabsByPanel(labs: any[]) {
-  const grouped: Record<string, any[]> = {}
-  for (const lab of labs) {
-    if (!grouped[lab.panel]) {
-      grouped[lab.panel] = []
-    }
-    grouped[lab.panel].push({
-      code: lab.code,
-      name: lab.name,
-      value_si: lab.value_si,
-      unit_si: lab.unit_si,
-    })
-  }
-  return grouped
-}
+const MODEL = 'claude-3-5-sonnet-20240620';
+const MAX_TOKENS = 4000;
 
 export async function POST(req: NextRequest) {
   try {
-    console.log("[v0] Starting lab interpretation request")
-    const body = await req.json()
-    const parsed = Req.parse(body) // 400s on bad input
-    console.log("[v0] Parsed request with", parsed.labs.length, "lab values")
+    // Get the request body
+    const body = await req.json();
+    const { demographics, labs, context } = body;
 
-    const labsByPanel = groupLabsByPanel(parsed.labs)
-
-    // Build a minimal, privacy-first payload for the model
-    const modelInput = {
-      demographics: parsed.demographics,
-      context: parsed.context ?? {},
-      labsByPanel,
+    if (!labs || !Array.isArray(labs) || labs.length === 0) {
+      return NextResponse.json(
+        { error: 'No lab results provided' },
+        { status: 400 }
+      );
     }
 
-    console.log("[v0] Sending request to Claude with panels:", Object.keys(labsByPanel))
+    // Group labs by panel
+    const labsByPanel = labs.reduce((acc, lab) => {
+      if (!acc[lab.panel]) {
+        acc[lab.panel] = [];
+      }
+      acc[lab.panel].push(lab);
+      return acc;
+    }, {});
 
-    const completion = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-latest",
-      max_tokens: 1200,
-      temperature: 0.2,
-      system: SYSTEM_PROMPT,
+    // Create enhanced system prompt with comprehensive context
+    const systemPrompt = `You are a medical lab interpretation assistant with expertise in personalized medicine. Your task is to analyze lab results within the FULL CONTEXT of a person's demographic and health profile.
+
+CRITICAL CONTEXTUAL FACTORS TO CONSIDER:
+1. AGE: Reference ranges and clinical significance vary significantly by age
+   - Hormone levels (testosterone, estrogen) naturally decline with age
+   - Kidney function markers typically decrease with age
+   - Bone mineral markers change throughout life stages
+   - Glucose tolerance decreases with age
+
+2. SEX: Many lab values have different normal ranges based on biological sex
+   - Hemoglobin/hematocrit (higher in males)
+   - Liver enzymes (higher upper limits in males)
+   - Creatinine (higher in males due to muscle mass)
+   - Hormones (testosterone, estrogen) vary dramatically by sex
+
+3. ETHNICITY: Genetic variations affect baseline values and risk assessment
+   - Hemoglobin (lower reference ranges in Black individuals)
+   - Vitamin D (naturally lower in darker skin tones)
+   - Kidney function (historical adjustments for Black patients)
+   - HbA1c (reads higher in Black, Hispanic populations)
+   - Lipid profiles (variations across ethnic groups)
+
+4. BODY COMPOSITION: Weight, BMI, and body composition affect many markers
+   - Liver enzymes often elevated with higher BMI
+   - Inflammatory markers increase with obesity
+   - Hormone levels affected by body fat percentage
+   - Metabolic markers vary with body composition
+
+5. LIFESTYLE FACTORS: Activity, diet, and habits significantly impact results
+   - Exercise affects muscle enzymes (CK, AST, ALT)
+   - Alcohol impacts liver markers and lipids
+   - Smoking affects inflammatory markers and hormones
+   - Diet patterns influence metabolic markers
+
+6. MEDICAL CONDITIONS: Existing conditions provide critical interpretive context
+   - Diabetes affects multiple systems beyond glucose
+   - Thyroid conditions influence metabolism markers
+   - Liver disease alters protein and coagulation values
+   - Kidney disease affects electrolytes and minerals
+
+7. MEDICATIONS: Many drugs alter lab values in predictable ways
+   - Statins affect liver enzymes
+   - Diuretics impact electrolytes
+   - Metformin can lower B12 levels
+   - Biotin supplements interfere with hormone tests
+
+When interpreting results, explicitly consider these factors in your analysis. Indicate when a seemingly "abnormal" result might actually be expected or normal for THIS SPECIFIC PERSON based on their unique profile.
+
+Your response must be structured as a valid JSON object with the following structure:
+{
+  "summary": "Brief overview that incorporates key demographic/health context",
+  "interpretation": "Detailed analysis considering the person's complete profile",
+  "recommendations": ["Context-appropriate recommendations"],
+  "markers": {
+    "[MARKER_CODE]": {
+      "status": "normal|high|low|critical_high|critical_low",
+      "reference_range": "The reference range appropriate for this person",
+      "interpretation": "Marker interpretation considering personal context"
+    }
+  },
+  "panel_interpretations": {
+    "[PANEL_NAME]": "Panel-specific interpretation with contextual factors"
+  }
+}`;
+
+    // Human prompt with comprehensive demographic and health profile
+    let humanPrompt = 'Please interpret the following lab results:\n\n';
+
+    // Comprehensive demographics and health profile section
+    if (demographics) {
+      humanPrompt += 'Patient Profile:\n';
+      
+      // Basic demographics
+      if (demographics.age) humanPrompt += `Age: ${demographics.age} years\n`;
+      if (demographics.sex) humanPrompt += `Sex: ${demographics.sex}\n`;
+      if (demographics.ethnicity) humanPrompt += `Ethnicity: ${demographics.ethnicity}\n`;
+      
+      // Body composition
+      if (demographics.weight) humanPrompt += `Weight: ${demographics.weight} kg\n`;
+      if (demographics.height) humanPrompt += `Height: ${demographics.height} cm\n`;
+      if (demographics.bmi) humanPrompt += `BMI: ${demographics.bmi}\n`;
+      
+      // Lifestyle factors
+      if (demographics.exercise) humanPrompt += `Exercise: ${demographics.exercise}\n`;
+      if (demographics.smoking) humanPrompt += `Smoking: ${demographics.smoking}\n`;
+      if (demographics.alcohol) humanPrompt += `Alcohol: ${demographics.alcohol}\n`;
+      if (demographics.diet) humanPrompt += `Diet: ${demographics.diet}\n`;
+      
+      // Medical context
+      if (demographics.conditions) {
+        if (Array.isArray(demographics.conditions)) {
+          humanPrompt += `Medical conditions: ${demographics.conditions.join(', ')}\n`;
+        } else {
+          humanPrompt += `Medical conditions: ${demographics.conditions}\n`;
+        }
+      }
+      
+      if (demographics.medications) {
+        if (Array.isArray(demographics.medications)) {
+          humanPrompt += `Medications: ${demographics.medications.join(', ')}\n`;
+        } else {
+          humanPrompt += `Medications: ${demographics.medications}\n`;
+        }
+      }
+      
+      // Handle any other provided demographics fields dynamically
+      Object.entries(demographics).forEach(([key, value]) => {
+        // Skip the ones we've already explicitly handled
+        const handledKeys = ['age', 'sex', 'ethnicity', 'weight', 'height', 'bmi', 
+                            'exercise', 'smoking', 'alcohol', 'diet', 
+                            'conditions', 'medications'];
+        
+        if (!handledKeys.includes(key) && value) {
+          humanPrompt += `${key.charAt(0).toUpperCase() + key.slice(1)}: ${value}\n`;
+        }
+      });
+      
+      humanPrompt += '\n';
+    }
+
+    // Additional context if provided
+    if (context) {
+      humanPrompt += `Additional Context: ${context}\n\n`;
+    }
+
+    // Add lab results by panel
+    humanPrompt += 'Lab Results:\n';
+    Object.entries(labsByPanel).forEach(([panel, panelLabs]) => {
+      humanPrompt += `\n${panel.toUpperCase()} PANEL:\n`;
+      panelLabs.forEach((lab: any) => {
+        humanPrompt += `${lab.name} (${lab.code}): ${lab.value_si !== null ? lab.value_si : 'N/A'} ${lab.unit_si || ''}\n`;
+      });
+    });
+
+    humanPrompt += '\nProvide your interpretation as a valid JSON object with the structure specified.';
+
+    // Call the Anthropic API
+    const response = await anthropic.messages.create({
+      model: MODEL,
+      max_tokens: MAX_TOKENS,
+      system: systemPrompt,
       messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `Return ONLY JSON in this shape (no markdown, no prose):
-${JSON.stringify(ResponseHint, null, 2)}
-
-Here is the user context (no identifiers):
-${JSON.stringify(modelInput, null, 2)}
-
-The lab results are grouped by panel for easier analysis. Please provide a comprehensive interpretation focusing on:
-1. Overall health summary
-2. Any concerning values (flags)
-3. Health considerations based on the results
-4. Lifestyle recommendations
-5. Questions the user should ask their doctor`,
-            },
-          ],
-        },
+        { role: 'user', content: humanPrompt }
       ],
-    })
+    });
 
-    console.log("[v0] Received response from Claude")
-    const text = completion.content?.[0]?.type === "text" ? completion.content[0].text : ""
-
-    let data: unknown
+    // Parse the response
+    let interpretationJson;
     try {
-      data = JSON.parse(text)
-      console.log("[v0] Successfully parsed Claude response JSON")
-    } catch (parseError) {
-      console.error("[v0] Failed to parse Claude response:", parseError)
-      console.error("[v0] Raw response:", text)
-      return NextResponse.json({ error: "Upstream JSON parse failed" }, { status: 502 })
+      // Extract the text content from the response
+      const content = response.content[0].text;
+      
+      // Try to parse the JSON directly
+      interpretationJson = JSON.parse(content);
+    } catch (error) {
+      console.error('Error parsing Claude response:', error);
+      console.log('Raw response:', response.content[0].text);
+      
+      return NextResponse.json(
+        { error: 'Failed to parse interpretation' },
+        { status: 500 }
+      );
     }
 
-    const valid = Resp.safeParse(data)
-    if (!valid.success) {
-      console.error("[v0] Invalid response shape:", valid.error.flatten())
-      return NextResponse.json({ error: "Invalid response shape", details: valid.error.flatten() }, { status: 502 })
-    }
-
-    console.log("[v0] Successfully validated and returning interpretation")
-    return NextResponse.json(valid.data, { status: 200 })
-  } catch (e: any) {
-    // Bad request or server error
-    if (e instanceof z.ZodError) {
-      console.error("[v0] Validation error:", e.flatten())
-      return NextResponse.json({ error: "Invalid payload", details: e.flatten() }, { status: 400 })
-    }
-    console.error("[v0] Interpretation error:", e)
-    return NextResponse.json({ error: "Interpretation failed" }, { status: 500 })
+    return NextResponse.json({
+      interpretation: interpretationJson,
+      model: MODEL,
+    });
+  } catch (error) {
+    console.error('Error in /api/interpret:', error);
+    return NextResponse.json(
+      { error: 'Failed to interpret lab results' },
+      { status: 500 }
+    );
   }
 }
