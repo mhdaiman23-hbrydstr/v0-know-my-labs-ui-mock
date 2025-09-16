@@ -1,137 +1,142 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 
-interface LabEntry {
-  id: string
-  marker: string
-  value: number
-  unit: string
-  value_si?: number
-  unit_si?: string
-  panel: string
-  referenceRange: string
-}
-
-interface SaveRequest {
-  set: {
-    source: string
-    collected_at: string
-    input_units: string
-    parse_method: string
-    panel_selection: string
-    demographics: any
-  }
-  labs: LabEntry[]
-  interpretation: any
-}
-
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
+    console.log("[v0] Save API: Starting request processing")
+
+    // Get the request body
+    const body = await req.json()
+    console.log("[v0] Save API: Request body received", {
+      hasLabs: !!body.labs,
+      labsCount: body.labs?.length,
+      hasInterpretation: !!body.interpretation,
+      hasDemographics: !!body.demographics,
+    })
+
+    const { demographics, context, labs, interpretation } = body
+
+    // Validate required fields
+    if (!labs || !Array.isArray(labs) || labs.length === 0) {
+      console.log("[v0] Save API: Missing or empty labs array")
+      return NextResponse.json({ error: "Labs data is required and must be a non-empty array" }, { status: 400 })
+    }
+
+    if (!interpretation) {
+      console.log("[v0] Save API: Missing interpretation data")
+      return NextResponse.json({ error: "Interpretation data is required" }, { status: 400 })
+    }
+
     const supabase = await createClient()
 
+    // Get the current user from session cookies
     const {
       data: { user },
-      error: authError,
+      error: userError,
     } = await supabase.auth.getUser()
+    console.log("[v0] Save API: User authentication check", {
+      hasUser: !!user,
+      userId: user?.id,
+      error: userError?.message,
+    })
 
-    if (authError || !user) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    if (userError || !user) {
+      console.log("[v0] Save API: Authentication failed", userError)
+      return NextResponse.json({ error: "Authentication required. Please log in." }, { status: 401 })
     }
 
-    const body: SaveRequest = await request.json()
+    const panels = [...new Set(labs.map((lab: any) => lab.panel).filter(Boolean))]
+    const source = context?.source || "upload"
+    const collectedAt = context?.collected_at || new Date().toISOString().split("T")[0]
 
-    if (!body.set || !body.labs || !body.interpretation) {
-      return NextResponse.json(
-        {
-          error: "Missing required fields: set, labs, interpretation",
-        },
-        { status: 400 },
-      )
-    }
+    console.log("[v0] Save API: Extracted metadata", {
+      panels,
+      source,
+      collectedAt,
+      userId: user.id,
+    })
 
-    if (!Array.isArray(body.labs) || body.labs.length === 0) {
-      return NextResponse.json(
-        {
-          error: "Labs must be a non-empty array",
-        },
-        { status: 400 },
-      )
-    }
-
-    const { data: labSet, error: setError } = await supabase
+    const { data: labSet, error: labSetError } = await supabase
       .from("lab_sets")
       .insert({
         user_id: user.id,
-        source: body.set.source,
-        collected_at: body.set.collected_at,
-        input_units: body.set.input_units,
-        parse_method: body.set.parse_method,
-        panel_selection: body.set.panel_selection,
-        demographics: body.set.demographics,
+        demographics: demographics || {},
+        source,
+        panel_selection: panels, // Use panel_selection instead of panels
+        collected_at: collectedAt,
+        status: "completed",
+        input_units: "mixed",
+        parse_method: "ai_extraction",
       })
       .select("id")
       .single()
 
-    if (setError) {
-      console.error("Error inserting lab_set:", setError)
-      return NextResponse.json(
-        {
-          error: "Failed to save lab set",
-        },
-        { status: 500 },
-      )
+    if (labSetError) {
+      console.error("[v0] Save API: Error inserting lab_set:", labSetError)
+      return NextResponse.json({ error: "Failed to save lab set", details: labSetError.message }, { status: 500 })
     }
 
-    const setId = labSet.id
+    console.log("[v0] Save API: Lab set created", { labSetId: labSet.id })
 
-    const labResults = body.labs.map((lab) => ({
-      set_id: setId,
-      marker: lab.marker,
-      value_si: lab.value_si || lab.value, // Use SI value if available, fallback to raw
-      unit_si: lab.unit_si || lab.unit,
-      value_raw: lab.value,
-      unit_raw: lab.unit,
-      panel: lab.panel,
-      reference_range: lab.referenceRange,
+    const labResults = labs.map((lab: any) => ({
+      set_id: labSet.id, // Use set_id to match database schema
+      panel: lab.panel || "unknown",
+      code: lab.code || "",
+      name: lab.name || "",
+      value_raw: lab.value_raw !== undefined ? Number(lab.value_raw) : null,
+      unit_raw: lab.unit_raw || "",
+      value_si: lab.value_si !== undefined ? Number(lab.value_si) : null,
+      unit_si: lab.unit_si || "",
     }))
 
-    const { error: labsError } = await supabase.from("lab_results").insert(labResults)
+    console.log("[v0] Save API: Inserting lab results", { count: labResults.length })
 
-    if (labsError) {
-      console.error("Error inserting lab_results:", labsError)
+    const { error: labResultsError } = await supabase.from("lab_results").insert(labResults)
+
+    if (labResultsError) {
+      console.error("[v0] Save API: Error inserting lab_results:", labResultsError)
       return NextResponse.json(
-        {
-          error: "Failed to save lab results",
-        },
+        { error: "Failed to save lab results", details: labResultsError.message },
         { status: 500 },
       )
     }
 
-    const { error: interpretationError } = await supabase.from("interpretations").insert({
-      set_id: setId,
-      model: "mock",
-      response: body.interpretation,
-      created_at: new Date().toISOString(),
-    })
+    const interpretationData = {
+      set_id: labSet.id, // Use set_id to match database schema
+      summary: interpretation.summary || "",
+      flags: interpretation.flags || {},
+      considerations: interpretation.considerations || {},
+      lifestyle: interpretation.lifestyle || {},
+      questions: interpretation.questions || {},
+      safety_notice: interpretation.safety_notice || "",
+      model: interpretation.model || "claude-3-5-sonnet",
+    }
+
+    console.log("[v0] Save API: Inserting interpretation")
+
+    const { error: interpretationError } = await supabase.from("interpretations").insert(interpretationData)
 
     if (interpretationError) {
-      console.error("Error inserting interpretation:", interpretationError)
+      console.error("[v0] Save API: Error inserting interpretation:", interpretationError)
       return NextResponse.json(
-        {
-          error: "Failed to save interpretation",
-        },
+        { error: "Failed to save interpretation", details: interpretationError.message },
         { status: 500 },
       )
     }
 
+    console.log("[v0] Save API: Successfully saved all data", { labSetId: labSet.id })
+
     return NextResponse.json({
-      set_id: setId,
+      success: true,
+      lab_set_id: labSet.id, // Return lab_set_id as requested
+      message: "Lab results and interpretation saved successfully",
     })
   } catch (error) {
-    console.error("Error in save API:", error)
+    console.error("[v0] Save API: Unexpected error:", error)
     return NextResponse.json(
       {
         error: "Internal server error",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

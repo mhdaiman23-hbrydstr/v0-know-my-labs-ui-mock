@@ -7,9 +7,14 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Trash2, Plus, RotateCcw, Upload, ArrowRight } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Badge } from "@/components/ui/badge"
+import { Trash2, Plus, RotateCcw, Upload, ArrowRight, AlertTriangle } from "lucide-react"
 import { useLabTest } from "@/lib/lab-test-context"
 import { useToast } from "@/hooks/use-toast"
+import { toSI, formatValue } from "@/lib/units"
 
 interface LabMarker {
   id: string
@@ -22,6 +27,7 @@ interface LabMarker {
   unit_si?: string
   value_raw?: number | string
   unit_raw?: string
+  confidence?: number
 }
 
 export default function ReviewPage() {
@@ -32,6 +38,12 @@ export default function ReviewPage() {
   const [originalLabs, setOriginalLabs] = useState<LabMarker[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [isMounted, setIsMounted] = useState(false)
+  const [demographics, setDemographics] = useState({
+    age: labTestData.age || "",
+    sex: labTestData.sex || "",
+    ethnicity: labTestData.ethnicity || "",
+    fastingStatus: labTestData.fastingStatus || "",
+  })
 
   useEffect(() => {
     setIsMounted(true)
@@ -54,7 +66,96 @@ export default function ReviewPage() {
   }, [labTestData.extractedLabs, router, isMounted])
 
   const handleValueChange = (id: string, field: keyof LabMarker, value: string | number) => {
-    setLabs((prev) => prev.map((lab) => (lab.id === id ? { ...lab, [field]: value } : lab)))
+    setLabs((prev) =>
+      prev.map((lab) => {
+        if (lab.id !== id) return lab
+
+        const updatedLab = { ...lab, [field]: value }
+
+        // If changing the raw value or unit, automatically convert to SI
+        if (field === "value" || field === "unit") {
+          const numValue = typeof value === "string" ? Number.parseFloat(value) : value
+          const unit = field === "unit" ? String(value) : String(lab.unit)
+
+          if (!isNaN(numValue) && unit && lab.marker) {
+            const siConversion = toSI(lab.marker, numValue, unit)
+            if (siConversion.value !== null) {
+              updatedLab.value_si = siConversion.value
+              updatedLab.unit_si = siConversion.unit
+            }
+          }
+        }
+
+        return updatedLab
+      }),
+    )
+  }
+
+  const handleDemographicChange = (field: string, value: string) => {
+    setDemographics((prev) => ({ ...prev, [field]: value }))
+    updateLabTestData({ [field]: value })
+  }
+
+  const validateData = () => {
+    if (labs.length === 0) {
+      toast({
+        title: "No Lab Data",
+        description: "Please add at least one lab marker before continuing.",
+        variant: "destructive",
+      })
+      return false
+    }
+
+    if (!demographics.age || !demographics.sex) {
+      toast({
+        title: "Missing Demographics",
+        description: "Please provide age and sex before continuing.",
+        variant: "destructive",
+      })
+      return false
+    }
+
+    const emptyMarkers = labs.filter((lab) => !lab.marker || lab.marker.trim() === "")
+    if (emptyMarkers.length > 0) {
+      toast({
+        title: "Missing Marker Names",
+        description: "Please fill in all marker names before continuing.",
+        variant: "destructive",
+      })
+      return false
+    }
+
+    const invalidValues = labs.filter((lab) => {
+      const value = lab.value_si || lab.value
+      return !value || isNaN(Number.parseFloat(String(value)))
+    })
+    if (invalidValues.length > 0) {
+      toast({
+        title: "Invalid Values",
+        description: "Please ensure all lab values are valid numbers.",
+        variant: "destructive",
+      })
+      return false
+    }
+
+    return true
+  }
+
+  const groupedLabs = labs.reduce(
+    (acc, lab) => {
+      const panel = lab.panel || "General"
+      if (!acc[panel]) acc[panel] = []
+      acc[panel].push(lab)
+      return acc
+    },
+    {} as Record<string, LabMarker[]>,
+  )
+
+  const getConfidenceColor = (confidence?: number) => {
+    if (!confidence) return "secondary"
+    if (confidence >= 0.9) return "default"
+    if (confidence >= 0.7) return "secondary"
+    return "destructive"
   }
 
   const addNewRow = () => {
@@ -87,57 +188,30 @@ export default function ReviewPage() {
   }
 
   const handleContinueToAnalysis = async () => {
-    if (labs.length === 0) {
-      toast({
-        title: "No Lab Data",
-        description: "Please add at least one lab marker before continuing.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const emptyMarkers = labs.filter((lab) => !lab.marker || lab.marker.trim() === "")
-    if (emptyMarkers.length > 0) {
-      toast({
-        title: "Missing Marker Names",
-        description: "Please fill in all marker names before continuing.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    const invalidValues = labs.filter((lab) => {
-      const value = lab.value_si || lab.value
-      return !value || isNaN(Number.parseFloat(String(value)))
-    })
-    if (invalidValues.length > 0) {
-      toast({
-        title: "Invalid Values",
-        description: "Please ensure all lab values are valid numbers.",
-        variant: "destructive",
-      })
-      return
-    }
+    if (!validateData()) return
 
     setIsLoading(true)
 
     try {
-      console.log("[v0] Starting lab analysis with data:", { labTestData, labs })
+      console.log("[v0] Starting lab analysis with data:", { labTestData, labs, demographics })
 
-      updateLabTestData({ reviewedLabs: labs })
+      updateLabTestData({
+        reviewedLabs: labs,
+        ...demographics,
+      })
 
       const payload = {
         demographics: {
           sex:
-            labTestData.sex?.toLowerCase() === "male"
+            demographics.sex?.toLowerCase() === "male"
               ? "male"
-              : labTestData.sex?.toLowerCase() === "female"
+              : demographics.sex?.toLowerCase() === "female"
                 ? "female"
                 : "unspecified",
-          ageYears: Number.parseInt(labTestData.age) || 30,
-          ethnicity: labTestData.ethnicity || undefined,
+          ageYears: Number.parseInt(demographics.age) || 30,
+          ethnicity: demographics.ethnicity || undefined,
           units: "SI" as const,
-          fasting: labTestData.fastingStatus === "fasting",
+          fasting: demographics.fastingStatus === "fasting",
           testDate: new Date().toISOString().split("T")[0],
         },
         context: {
@@ -201,9 +275,9 @@ export default function ReviewPage() {
         <Card className="w-full max-w-md">
           <CardContent className="pt-6">
             <div className="text-center">
-              <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No Lab Data Found</h3>
-              <p className="text-gray-600 mb-4">Please upload a lab report first.</p>
+              <Upload className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-medium text-foreground mb-2">No Lab Data Found</h3>
+              <p className="text-muted-foreground mb-4">Please upload a lab report first.</p>
               <Button onClick={() => router.push("/upload")}>Go to Upload</Button>
             </div>
           </CardContent>
@@ -218,19 +292,79 @@ export default function ReviewPage() {
         <div className="max-w-6xl mx-auto">
           {/* Header */}
           <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Review Your Lab Results</h1>
-            <p className="text-gray-600">Please check your values before analysis. Correct errors if needed.</p>
+            <h1 className="text-3xl font-bold text-foreground mb-2">Review Your Lab Results</h1>
+            <p className="text-muted-foreground">Please check your values and provide demographics before analysis.</p>
           </div>
 
           {/* Warning Banner */}
           <Alert className="mb-6 border-amber-200 bg-amber-50">
+            <AlertTriangle className="h-4 w-4" />
             <AlertDescription className="text-amber-800">
-              <strong>Please check your values before analysis.</strong> Correct any errors if needed. You can edit
-              values directly in the table below.
+              <strong>Please review all values carefully.</strong> Values are automatically converted to SI units for
+              analysis. Confidence scores indicate extraction accuracy.
             </AlertDescription>
           </Alert>
 
-          {/* Lab Results Table */}
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle>Demographics</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                  <Label htmlFor="age">Age *</Label>
+                  <Input
+                    id="age"
+                    type="number"
+                    placeholder="Age in years"
+                    value={demographics.age}
+                    onChange={(e) => handleDemographicChange("age", e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="sex">Sex *</Label>
+                  <Select value={demographics.sex} onValueChange={(value) => handleDemographicChange("sex", value)}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select sex" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="male">Male</SelectItem>
+                      <SelectItem value="female">Female</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="ethnicity">Ethnicity</Label>
+                  <Input
+                    id="ethnicity"
+                    placeholder="Optional"
+                    value={demographics.ethnicity}
+                    onChange={(e) => handleDemographicChange("ethnicity", e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="fasting">Fasting Status</Label>
+                  <Select
+                    value={demographics.fastingStatus}
+                    onValueChange={(value) => handleDemographicChange("fastingStatus", value)}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="fasting">Fasting</SelectItem>
+                      <SelectItem value="non-fasting">Non-fasting</SelectItem>
+                      <SelectItem value="unknown">Unknown</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <Card className="mb-6">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Extracted Lab Markers</CardTitle>
@@ -256,76 +390,99 @@ export default function ReviewPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Marker Name</TableHead>
-                      <TableHead>Value (SI)</TableHead>
-                      <TableHead>Unit (SI)</TableHead>
-                      <TableHead>Panel</TableHead>
-                      <TableHead>Reference Range</TableHead>
-                      <TableHead className="w-[50px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {labs.map((lab) => (
-                      <TableRow key={lab.id}>
-                        <TableCell>
-                          <Input
-                            value={lab.marker}
-                            onChange={(e) => handleValueChange(lab.id, "marker", e.target.value)}
-                            placeholder="Marker name"
-                            className="min-w-[150px]"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            value={lab.value_si !== undefined ? lab.value_si : lab.value}
-                            onChange={(e) => handleValueChange(lab.id, "value_si", e.target.value)}
-                            placeholder="Value"
-                            className="min-w-[80px]"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            value={lab.unit_si !== undefined ? lab.unit_si : lab.unit}
-                            onChange={(e) => handleValueChange(lab.id, "unit_si", e.target.value)}
-                            placeholder="Unit"
-                            className="min-w-[80px]"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            value={lab.panel}
-                            onChange={(e) => handleValueChange(lab.id, "panel", e.target.value)}
-                            placeholder="Panel"
-                            className="min-w-[120px]"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            value={lab.referenceRange || ""}
-                            onChange={(e) => handleValueChange(lab.id, "referenceRange", e.target.value)}
-                            placeholder="Reference range"
-                            className="min-w-[120px]"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => deleteRow(lab.id)}
-                            className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <Tabs defaultValue={Object.keys(groupedLabs)[0]} className="w-full">
+                <TabsList className="grid w-full grid-cols-auto">
+                  {Object.keys(groupedLabs).map((panel) => (
+                    <TabsTrigger key={panel} value={panel}>
+                      {panel} ({groupedLabs[panel].length})
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+
+                {Object.entries(groupedLabs).map(([panel, panelLabs]) => (
+                  <TabsContent key={panel} value={panel}>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Marker Name</TableHead>
+                            <TableHead>Value (Raw)</TableHead>
+                            <TableHead>Unit (Raw)</TableHead>
+                            <TableHead>Value (SI)</TableHead>
+                            <TableHead>Unit (SI)</TableHead>
+                            <TableHead>Confidence</TableHead>
+                            <TableHead>Reference Range</TableHead>
+                            <TableHead className="w-[50px]">Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {panelLabs.map((lab) => (
+                            <TableRow key={lab.id}>
+                              <TableCell>
+                                <Input
+                                  value={lab.marker}
+                                  onChange={(e) => handleValueChange(lab.id, "marker", e.target.value)}
+                                  placeholder="Marker name"
+                                  className="min-w-[150px]"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  value={lab.value}
+                                  onChange={(e) => handleValueChange(lab.id, "value", e.target.value)}
+                                  placeholder="Value"
+                                  className="min-w-[80px]"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  value={lab.unit}
+                                  onChange={(e) => handleValueChange(lab.id, "unit", e.target.value)}
+                                  placeholder="Unit"
+                                  className="min-w-[80px]"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-sm text-muted-foreground">
+                                  {lab.value_si ? formatValue(Number(lab.value_si), String(lab.unit_si)) : "—"}
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <div className="text-sm text-muted-foreground">{lab.unit_si || "—"}</div>
+                              </TableCell>
+                              <TableCell>
+                                {lab.confidence && (
+                                  <Badge variant={getConfidenceColor(lab.confidence)}>
+                                    {Math.round(lab.confidence * 100)}%
+                                  </Badge>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Input
+                                  value={lab.referenceRange || ""}
+                                  onChange={(e) => handleValueChange(lab.id, "referenceRange", e.target.value)}
+                                  placeholder="Reference range"
+                                  className="min-w-[120px]"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => deleteRow(lab.id)}
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </TabsContent>
+                ))}
+              </Tabs>
             </CardContent>
           </Card>
 

@@ -43,13 +43,14 @@ export async function updateSession(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser()
 
-    // Protect dashboard, profile, and settings routes
-    const protectedPrefixes = ["/dashboard", "/profile", "/settings"]
+    // Protect dashboard, profile, settings routes, and API endpoints
+    const protectedPrefixes = ["/dashboard", "/profile", "/settings", "/api/save"]
     const isProtectedRoute = protectedPrefixes.some((prefix) => request.nextUrl.pathname.startsWith(prefix))
 
     if (!user && isProtectedRoute) {
       const url = request.nextUrl.clone()
       url.pathname = "/signin"
+      url.searchParams.set("redirect", request.nextUrl.pathname + request.nextUrl.search)
       return NextResponse.redirect(url)
     }
 
@@ -58,13 +59,14 @@ export async function updateSession(request: NextRequest) {
   } catch (error) {
     console.log("[v0] Supabase middleware error:", error)
 
-    // For protected routes, redirect to signin when Supabase fails
-    const protectedPrefixes = ["/dashboard", "/profile", "/settings"]
+    // For protected routes and API endpoints, redirect to signin when Supabase fails
+    const protectedPrefixes = ["/dashboard", "/profile", "/settings", "/api/save"]
     const isProtectedRoute = protectedPrefixes.some((prefix) => request.nextUrl.pathname.startsWith(prefix))
 
     if (isProtectedRoute) {
       const url = request.nextUrl.clone()
       url.pathname = "/signin"
+      url.searchParams.set("redirect", request.nextUrl.pathname + request.nextUrl.search)
       return NextResponse.redirect(url)
     }
 
