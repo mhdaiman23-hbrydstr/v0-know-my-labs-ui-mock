@@ -1,202 +1,151 @@
 "use client"
 
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
-import { createBrowserClient } from "@supabase/ssr"
-import { useAuth } from "./auth-context"
+import React, { createContext, useContext, useState, useEffect } from "react"
 
+// Define types
 interface LabMarker {
-  id: string
-  marker: string
-  value: number | string
+  code: string
+  name: string
+  value: number
   unit: string
-  panel: string
-  referenceRange?: string
-  value_si?: number | string
-  unit_si?: string
-  value_raw?: number | string
-  unit_raw?: string
+  value_si: number
+  unit_si: string
+  ref_range_low?: number
+  ref_range_high?: number
+  category?: string
+  flag?: string
+  collection_date?: string
 }
 
-interface InterpretationResult {
+interface Demographics {
+  age?: number
+  sex?: string
+  height?: number
+  weight?: number
+  reason?: string
+}
+
+interface Interpretation {
   summary: string
   flags: Array<{
-    marker?: string
-    name?: string
-    value: string
-    referenceRange: string
-    status: string
-    severity: "high" | "low" | "borderline" | "normal" | "critical" | "note"
-    rationale?: string
+    severity: "critical" | "high" | "medium" | "low" | "normal"
+    lab_code: string
+    lab_name: string
+    finding: string
+    description: string
   }>
-  considerations: string[]
-  lifestyle: string[]
-  questionsForDoctor: string[]
-  safetyNotice?: string
-}
-
-interface LabTestData {
-  // Personal info
-  age: string
-  sex: string
-  ethnicity: string
-  height: string
-  weight: string
-  lifestyle: {
-    exercise: string
-    diet: string
-    smoking: string
-    alcohol: string
-    sleep: string
-    stress: string
-  }
-  fastingStatus: string
-  testDate: string
-  units: string
-  referenceSet: string
-  medicalConditions: string[]
-  medications: string[]
-
-  // Lab panels
-  selectedPanels: string[]
-
-  // File info
-  fileName?: string
-  fileType?: string
-  usingSampleReport?: boolean
-
-  extractedLabs?: LabMarker[]
-  reviewedLabs?: LabMarker[]
-  interpretationResults?: InterpretationResult
-  uploadedFileName?: string
+  lifestyle: Array<{
+    type: "diet" | "exercise" | "sleep" | "stress" | "supplements" | "other"
+    recommendation: string
+    evidence: string
+  }>
+  doctor_questions: string[]
 }
 
 interface LabTestContextType {
-  labTestData: LabTestData
-  updateLabTestData: (data: Partial<LabTestData>) => void
+  extractedLabs: LabMarker[]
   setExtractedLabs: (labs: LabMarker[]) => void
+  reviewedLabs: LabMarker[]
   setReviewedLabs: (labs: LabMarker[]) => void
-  setInterpretationResults: (results: InterpretationResult) => void
-  saveLabTest: () => Promise<boolean>
-  resetLabTestData: () => void
+  demographics: Demographics
+  setDemographics: (demo: Demographics) => void
+  interpretation: Interpretation | null
+  setInterpretation: (interp: Interpretation | null) => void
 }
 
-const defaultLabTestData: LabTestData = {
-  age: "",
-  sex: "",
-  ethnicity: "",
-  height: "",
-  weight: "",
-  lifestyle: {
-    exercise: "",
-    diet: "",
-    smoking: "",
-    alcohol: "",
-    sleep: "",
-    stress: "",
-  },
-  fastingStatus: "",
-  testDate: "",
-  units: "",
-  referenceSet: "",
-  medicalConditions: [],
-  medications: [],
-  selectedPanels: [],
-  fileName: "",
-  fileType: "",
-  usingSampleReport: false,
-  extractedLabs: [],
-  reviewedLabs: [],
-  interpretationResults: undefined,
-  uploadedFileName: "",
-}
-
+// Create context
 const LabTestContext = createContext<LabTestContextType | undefined>(undefined)
 
-export function LabTestProvider({ children }: { children: ReactNode }) {
-  const [labTestData, setLabTestData] = useState<LabTestData>(defaultLabTestData)
-  const { user, isAuthenticated } = useAuth()
-
-  const updateLabTestData = useCallback((data: Partial<LabTestData>) => {
-    setLabTestData((prev) => ({ ...prev, ...data }))
-  }, [])
-
-  const setExtractedLabs = useCallback((labs: LabMarker[]) => {
-    setLabTestData((prev) => ({ ...prev, extractedLabs: labs }))
-  }, [])
-
-  const setReviewedLabs = useCallback((labs: LabMarker[]) => {
-    setLabTestData((prev) => ({ ...prev, reviewedLabs: labs }))
-  }, [])
-
-  const setInterpretationResults = useCallback((results: InterpretationResult) => {
-    setLabTestData((prev) => ({ ...prev, interpretationResults: results }))
-  }, [])
-
-  const saveLabTest = useCallback(async (): Promise<boolean> => {
-    if (!isAuthenticated || !user) {
-      console.log("[v0] User not authenticated, skipping save")
-      return false
-    }
-
+// Persist data to localStorage
+const saveToStorage = (key: string, data: any) => {
+  if (typeof window !== "undefined") {
     try {
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      )
-
-      const testDate = labTestData.testDate || new Date().toISOString().split("T")[0]
-
-      const { data, error } = await supabase
-        .from("lab_tests")
-        .insert({
-          user_id: user.id,
-          test_name: `Lab Analysis - ${new Date().toLocaleDateString()}`,
-          test_date: testDate,
-          panels: labTestData.selectedPanels,
-          file_name:
-            labTestData.uploadedFileName ||
-            labTestData.fileName ||
-            (labTestData.usingSampleReport ? "Sample Report" : null),
-          file_type: labTestData.fileType || (labTestData.usingSampleReport ? "sample" : null),
-          lab_markers: labTestData.reviewedLabs || labTestData.extractedLabs || [],
-          interpretation_results: labTestData.interpretationResults,
-        })
-        .select()
-
-      if (error) {
-        console.error("[v0] Error saving lab test:", error)
-        return false
-      }
-
-      console.log("[v0] Lab test saved successfully:", data)
-      return true
-    } catch (error) {
-      console.error("[v0] Error saving lab test:", error)
-      return false
+      localStorage.setItem(key, JSON.stringify(data))
+    } catch (e) {
+      console.error("Error saving to localStorage:", e)
     }
-  }, [isAuthenticated, user, labTestData])
-
-  const resetLabTestData = useCallback(() => {
-    setLabTestData(defaultLabTestData)
-  }, [])
-
-  return (
-    <LabTestContext.Provider
-      value={{
-        labTestData,
-        updateLabTestData,
-        setExtractedLabs,
-        setReviewedLabs,
-        setInterpretationResults,
-        saveLabTest,
-        resetLabTestData,
-      }}
-    >
-      {children}
-    </LabTestContext.Provider>
-  )
+  }
 }
 
+// Load data from localStorage
+const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem(key)
+      return stored ? JSON.parse(stored) : defaultValue
+    } catch (e) {
+      console.error("Error loading from localStorage:", e)
+      return defaultValue
+    }
+  }
+  return defaultValue
+}
+
+// Provider component
+export function LabTestProvider({ children }: { children: React.ReactNode }) {
+  // Initialize state from localStorage (if available)
+  const [extractedLabs, setExtractedLabsState] = useState<LabMarker[]>([])
+  const [reviewedLabs, setReviewedLabsState] = useState<LabMarker[]>([])
+  const [demographics, setDemographicsState] = useState<Demographics>({})
+  const [interpretation, setInterpretationState] = useState<Interpretation | null>(null)
+  
+  // Load data from localStorage on initial mount
+  useEffect(() => {
+    // Load data from localStorage
+    const storedExtractedLabs = loadFromStorage<LabMarker[]>("extractedLabs", [])
+    const storedReviewedLabs = loadFromStorage<LabMarker[]>("reviewedLabs", [])
+    const storedDemographics = loadFromStorage<Demographics>("demographics", {})
+    const storedInterpretation = loadFromStorage<Interpretation | null>("interpretation", null)
+    
+    console.log("Loading from localStorage:", {
+      extractedLabs: storedExtractedLabs,
+      reviewedLabs: storedReviewedLabs
+    })
+    
+    setExtractedLabsState(storedExtractedLabs)
+    setReviewedLabsState(storedReviewedLabs)
+    setDemographicsState(storedDemographics)
+    setInterpretationState(storedInterpretation)
+  }, [])
+  
+  // Wrapper functions to update state and localStorage
+  const setExtractedLabs = (labs: LabMarker[]) => {
+    console.log("Setting extracted labs:", labs)
+    setExtractedLabsState(labs)
+    saveToStorage("extractedLabs", labs)
+  }
+  
+  const setReviewedLabs = (labs: LabMarker[]) => {
+    setReviewedLabsState(labs)
+    saveToStorage("reviewedLabs", labs)
+  }
+  
+  const setDemographics = (demo: Demographics) => {
+    setDemographicsState(demo)
+    saveToStorage("demographics", demo)
+  }
+  
+  const setInterpretation = (interp: Interpretation | null) => {
+    setInterpretationState(interp)
+    saveToStorage("interpretation", interp)
+  }
+
+  // Context value
+  const value = {
+    extractedLabs,
+    setExtractedLabs,
+    reviewedLabs,
+    setReviewedLabs,
+    demographics,
+    setDemographics,
+    interpretation,
+    setInterpretation,
+  }
+
+  return <LabTestContext.Provider value={value}>{children}</LabTestContext.Provider>
+}
+
+// Hook for using the context
 export function useLabTest() {
   const context = useContext(LabTestContext)
   if (context === undefined) {
