@@ -189,9 +189,14 @@ export default function EditProfilePage() {
 
       if (success) {
         console.log("[v0] Profile updated successfully, redirecting to dashboard...")
-        setTimeout(() => {
+        const redirectTimer = setTimeout(() => {
           router.push("/dashboard")
         }, 100)
+
+        // Cleanup function to prevent memory leaks
+        return () => {
+          clearTimeout(redirectTimer)
+        }
       } else {
         console.error("Failed to update profile")
       }

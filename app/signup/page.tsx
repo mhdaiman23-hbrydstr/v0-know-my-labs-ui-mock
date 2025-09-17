@@ -1,8 +1,7 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -30,23 +29,28 @@ export default function SignupPage() {
   const { signup, isAuthenticated, loading } = useAuth()
   const router = useRouter()
 
-  if (isAuthenticated && !showLoadingAnimation) {
-    setShowLoadingAnimation(true)
+  useEffect(() => {
+    if (isAuthenticated && !showLoadingAnimation) {
+      setShowLoadingAnimation(true)
 
-    // Start progress animation
-    const progressInterval = setInterval(() => {
-      setLoadingProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(progressInterval)
-          router.push("/dashboard")
-          return 100
-        }
-        return prev + 2.5 // Complete in 4 seconds (100 / 2.5 = 40 intervals * 100ms = 4000ms)
-      })
-    }, 100)
+      // Start progress animation
+      const progressInterval = setInterval(() => {
+        setLoadingProgress((prev) => {
+          if (prev >= 100) {
+            clearInterval(progressInterval)
+            router.push("/dashboard")
+            return 100
+          }
+          return prev + 2.5 // Complete in 4 seconds (100 / 2.5 = 40 intervals * 100ms = 4000ms)
+        })
+      }, 100)
 
-    return null
-  }
+      // Cleanup function to prevent memory leaks
+      return () => {
+        clearInterval(progressInterval)
+      }
+    }
+  }, [isAuthenticated, showLoadingAnimation, router])
 
   if (showLoadingAnimation) {
     return (
@@ -84,7 +88,6 @@ export default function SignupPage() {
     )
   }
 
-  // Show loading while checking auth state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -127,7 +130,6 @@ export default function SignupPage() {
     }
   }
 
-  // Show success message after signup
   if (success) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">

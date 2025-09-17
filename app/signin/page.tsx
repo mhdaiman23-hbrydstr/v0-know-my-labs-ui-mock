@@ -1,8 +1,7 @@
 "use client"
 
 import type React from "react"
-
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -27,6 +26,34 @@ export default function SigninPage() {
   const { login, isAuthenticated, loading } = useAuth()
   const router = useRouter()
 
+  useEffect(() => {
+    if (isAuthenticated && !syncLoading) {
+      setSyncLoading(true)
+      setSyncProgress(0)
+
+      const progressInterval = setInterval(() => {
+        setSyncProgress((prev) => {
+          if (prev >= 100) {
+            clearInterval(progressInterval)
+            return 100
+          }
+          return prev + 2.5
+        })
+      }, 100)
+
+      const redirectTimer = setTimeout(() => {
+        clearInterval(progressInterval)
+        router.push("/dashboard")
+      }, 4000)
+
+      // Cleanup function to prevent memory leaks
+      return () => {
+        clearInterval(progressInterval)
+        clearTimeout(redirectTimer)
+      }
+    }
+  }, [isAuthenticated, syncLoading, router])
+
   // Show loading while checking auth state
   if (loading) {
     return (
@@ -34,26 +61,6 @@ export default function SigninPage() {
         <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     )
-  }
-
-  if (isAuthenticated && !syncLoading) {
-    setSyncLoading(true)
-    setSyncProgress(0)
-
-    const progressInterval = setInterval(() => {
-      setSyncProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(progressInterval)
-          return 100
-        }
-        return prev + 2.5
-      })
-    }, 100)
-
-    setTimeout(() => {
-      clearInterval(progressInterval)
-      router.push("/dashboard")
-    }, 4000)
   }
 
   if (syncLoading) {
@@ -97,25 +104,6 @@ export default function SigninPage() {
       const success = await login(formData.email, formData.password)
       if (success) {
         setIsLoading(false)
-        setSyncLoading(true)
-        setSyncProgress(0)
-
-        // Progress animation
-        const progressInterval = setInterval(() => {
-          setSyncProgress((prev) => {
-            if (prev >= 100) {
-              clearInterval(progressInterval)
-              return 100
-            }
-            return prev + 2.5
-          })
-        }, 100)
-
-        // Navigate to dashboard after 4 seconds
-        setTimeout(() => {
-          clearInterval(progressInterval)
-          router.push("/dashboard")
-        }, 4000)
       } else {
         setError("Invalid email or password")
         setIsLoading(false)
