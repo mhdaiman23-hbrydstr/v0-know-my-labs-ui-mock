@@ -187,6 +187,130 @@ export const markerCatalog: LabMarker[] = [
     unit_si: "pmol/L",
     reference_range: { min: 148, max: 664, unit: "pmol/L" },
   },
+  // Add these to lib/marker-catalog.ts
+{
+  panel: 'cbc',
+  code: 'RBC',
+  name: 'Red Blood Cell Count',
+  synonyms: ['red blood cell', 'rbc', 'erythrocytes', 'red cell count'],
+  regexes: [
+    'red\\s*blood\\s*cell.*?\\d+',
+    '\\brbc\\b.*?\\d+',
+    'erythrocytes.*?\\d+'
+  ],
+  units_allowed: ['x10^6/μL', 'x10^6/uL', 'x10^6/ul', 'x10^12/L', 'x10^12/l'],
+  unit_canonical: 'x10^12/L'
+},
+{
+  panel: 'cbc',
+  code: 'HCT',
+  name: 'Hematocrit',
+  synonyms: ['hematocrit', 'hct', 'haematocrit', 'packed cell volume', 'pcv'],
+  regexes: [
+    'h(a)?ematocrit.*?\\d+',
+    '\\bhct\\b.*?\\d+',
+    'packed\\s*cell\\s*volume.*?\\d+'
+  ],
+  units_allowed: ['%', 'L/L', 'l/l'],
+  unit_canonical: 'L/L'
+},
+{
+  panel: 'cbc',
+  code: 'MCV',
+  name: 'Mean Corpuscular Volume',
+  synonyms: ['mean corpuscular volume', 'mcv', 'mean cell volume'],
+  regexes: [
+    'mean\\s*corpuscular\\s*volume.*?\\d+',
+    '\\bmcv\\b.*?\\d+'
+  ],
+  units_allowed: ['fL', 'fl'],
+  unit_canonical: 'fL'
+},
+{
+  panel: 'cbc',
+  code: 'MCH',
+  name: 'Mean Corpuscular Hemoglobin',
+  synonyms: ['mean corpuscular hemoglobin', 'mch'],
+  regexes: [
+    'mean\\s*corpuscular\\s*h(a)?emoglobin.*?\\d+',
+    '\\bmch\\b.*?\\d+'
+  ],
+  units_allowed: ['pg'],
+  unit_canonical: 'pg'
+},
+{
+  panel: 'cbc',
+  code: 'MCHC',
+  name: 'Mean Corpuscular Hemoglobin Concentration',
+  synonyms: ['mean corpuscular hemoglobin concentration', 'mchc'],
+  regexes: [
+    'mean\\s*corpuscular\\s*h(a)?emoglobin\\s*concentration.*?\\d+',
+    '\\bmchc\\b.*?\\d+'
+  ],
+  units_allowed: ['g/dL', 'g/dl', 'g/L', 'g/l'],
+  unit_canonical: 'g/L'
+},
+{
+  panel: 'cbc',
+  code: 'NEUT',
+  name: 'Neutrophils',
+  synonyms: ['neutrophils', 'neut', 'neutrophil count', 'neu'],
+  regexes: [
+    'neutrophil.*?\\d+',
+    '\\bneut\\b.*?\\d+',
+    '\\bneu\\b.*?\\d+'
+  ],
+  units_allowed: ['x10^3/μL', 'x10^3/uL', 'x10^3/ul', 'x10^9/L', 'x10^9/l', '%'],
+  unit_canonical: 'x10^9/L'
+},
+{
+  panel: 'cbc',
+  code: 'LYMPH',
+  name: 'Lymphocytes',
+  synonyms: ['lymphocytes', 'lymph', 'lymphocyte count'],
+  regexes: [
+    'lymphocyte.*?\\d+',
+    '\\blymph\\b.*?\\d+'
+  ],
+  units_allowed: ['x10^3/μL', 'x10^3/uL', 'x10^3/ul', 'x10^9/L', 'x10^9/l', '%'],
+  unit_canonical: 'x10^9/L'
+},
+{
+  panel: 'cbc',
+  code: 'MONO',
+  name: 'Monocytes',
+  synonyms: ['monocytes', 'mono', 'monocyte count'],
+  regexes: [
+    'monocyte.*?\\d+',
+    '\\bmono\\b.*?\\d+'
+  ],
+  units_allowed: ['x10^3/μL', 'x10^3/uL', 'x10^3/ul', 'x10^9/L', 'x10^9/l', '%'],
+  unit_canonical: 'x10^9/L'
+},
+{
+  panel: 'cbc',
+  code: 'EOS',
+  name: 'Eosinophils',
+  synonyms: ['eosinophils', 'eos', 'eosinophil count'],
+  regexes: [
+    'eosinophil.*?\\d+',
+    '\\beos\\b.*?\\d+'
+  ],
+  units_allowed: ['x10^3/μL', 'x10^3/uL', 'x10^3/ul', 'x10^9/L', 'x10^9/l', '%'],
+  unit_canonical: 'x10^9/L'
+},
+{
+  panel: 'cbc',
+  code: 'BASO',
+  name: 'Basophils',
+  synonyms: ['basophils', 'baso', 'basophil count'],
+  regexes: [
+    'basophil.*?\\d+',
+    '\\bbaso\\b.*?\\d+'
+  ],
+  units_allowed: ['x10^3/μL', 'x10^3/uL', 'x10^3/ul', 'x10^9/L', 'x10^9/l', '%'],
+  unit_canonical: 'x10^9/L'
+}
 ]
 
 // Helper function to find markers by panel
