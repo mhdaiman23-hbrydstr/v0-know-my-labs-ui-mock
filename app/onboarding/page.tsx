@@ -58,6 +58,7 @@ export default function OnboardingPage() {
   const [newMedication, setNewMedication] = useState("")
   const [newCondition, setNewCondition] = useState("")
   const [measurementSystem, setMeasurementSystem] = useState("imperial")
+  const [isLoading, setIsLoading] = useState(true)
 
   const [formData, setFormData] = useState({
     age: "",
@@ -80,8 +81,13 @@ export default function OnboardingPage() {
   })
 
   useEffect(() => {
+    console.log("[v0] Onboarding useEffect triggered, user:", user)
+    console.log("[v0] User profile:", user?.profile)
+
     if (user?.profile) {
       const profile = user.profile
+      console.log("[v0] Setting form data from profile:", profile)
+
       setFormData({
         age: profile.age || "",
         sex: profile.sex || "",
@@ -101,11 +107,14 @@ export default function OnboardingPage() {
         units: profile.units || "",
         referenceSet: profile.reference_set || "",
       })
-      setMedicalConditions(profile.medical_conditions || [])
-      setMedications(profile.medications || [])
+
+      setMedicalConditions(Array.isArray(profile.medical_conditions) ? profile.medical_conditions : [])
+      setMedications(Array.isArray(profile.medications) ? profile.medications : [])
       setMeasurementSystem(profile.units === "Metric" ? "metric" : "imperial")
     }
-  }, [user?.profile])
+
+    setIsLoading(false)
+  }, [user])
 
   const handleLogout = () => {
     logout()
@@ -190,7 +199,6 @@ export default function OnboardingPage() {
         console.error("[v0] Failed to update profile")
       }
     } else {
-      // For non-authenticated users, just continue to panels
       router.push("/panels")
     }
   }
@@ -203,9 +211,19 @@ export default function OnboardingPage() {
     return measurementSystem === "metric" ? "e.g., 70 kg" : "e.g., 140 lbs"
   }
 
+  if (isLoading && isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading your profile...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-      {/* Header */}
       <header className="border-b bg-card/50 backdrop-blur-sm">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
@@ -259,7 +277,6 @@ export default function OnboardingPage() {
 
       <main className="container mx-auto px-4 py-8">
         <div className="mx-auto max-w-4xl">
-          {/* Progress Indicator */}
           <div className="mb-8">
             <div className="flex items-center justify-center gap-2 mb-4">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground text-sm font-semibold">
@@ -281,7 +298,6 @@ export default function OnboardingPage() {
             <p className="text-center text-sm text-muted-foreground">Step 1 of 4: Tell us about you</p>
           </div>
 
-          {/* Header */}
           <div className="mb-8 text-center">
             <h1 className="mb-2 text-3xl font-bold text-balance">Tell Us About You</h1>
             <p className="text-muted-foreground text-pretty">
@@ -302,7 +318,6 @@ export default function OnboardingPage() {
             </Alert>
           )}
 
-          {/* Form */}
           <Card>
             <CardHeader>
               <CardTitle>Personal Information</CardTitle>
@@ -322,7 +337,6 @@ export default function OnboardingPage() {
                 </Select>
               </div>
 
-              {/* Basic Demographics */}
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="age">Age</Label>
@@ -364,7 +378,6 @@ export default function OnboardingPage() {
                 </Select>
               </div>
 
-              {/* Physical Measurements */}
               <div className="grid gap-6 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="height">Height</Label>
@@ -618,7 +631,6 @@ export default function OnboardingPage() {
             </CardContent>
           </Card>
 
-          {/* Navigation */}
           <div className="mt-8 flex items-center justify-between">
             <Button asChild variant="outline">
               <Link href={isAuthenticated ? "/dashboard" : "/"}>
@@ -634,7 +646,6 @@ export default function OnboardingPage() {
         </div>
       </main>
 
-      {/* Footer */}
       <footer className="border-t bg-card/50 py-8">
         <div className="container mx-auto px-4 text-center">
           <p className="text-sm text-muted-foreground">

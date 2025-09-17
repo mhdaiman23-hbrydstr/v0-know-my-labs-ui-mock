@@ -51,6 +51,66 @@ export default function DashboardPage() {
     return () => clearTimeout(timer)
   }, [reviewedLabs, router])
 
+  const detailedMarkerInfo = {
+    Hemoglobin: {
+      whatItIs: "Protein in red blood cells that carries oxygen throughout your body",
+      whyItMatters:
+        "Low levels may cause fatigue and weakness; high levels can indicate dehydration or other conditions",
+      whatAffectsIt: "Iron intake, hydration status, altitude, smoking, exercise, blood loss, certain medications",
+      whenToCheckWithDoctor:
+        "If consistently outside normal range, experiencing fatigue, shortness of breath, or unusual weakness",
+    },
+    RBC: {
+      whatItIs: "Number of red blood cells in your blood that carry oxygen to tissues",
+      whyItMatters: "Too low → anemia risk and fatigue; too high → possible dehydration or bone marrow overactivity",
+      whatAffectsIt: "Iron-rich diet, endurance training, hydration, altitude, smoking, certain medications",
+      whenToCheckWithDoctor: "If values are consistently abnormal or you have symptoms like fatigue or dizziness",
+    },
+    WBC: {
+      whatItIs: "White blood cells that are part of your immune system and fight infections",
+      whyItMatters: "High levels may indicate infection or inflammation; low levels can mean weakened immunity",
+      whatAffectsIt: "Infections, stress, medications, autoimmune conditions, recent illness or vaccination",
+      whenToCheckWithDoctor:
+        "If consistently high or low, especially with fever, frequent infections, or feeling unwell",
+    },
+    Glucose: {
+      whatItIs: "Blood sugar level that provides energy to your cells",
+      whyItMatters: "High levels may indicate diabetes risk; low levels can cause weakness and confusion",
+      whatAffectsIt: "Diet, exercise, stress, medications, timing of last meal, sleep quality",
+      whenToCheckWithDoctor: "If consistently above 100 mg/dL fasting or you have diabetes risk factors",
+    },
+    Calcium: {
+      whatItIs: "Essential mineral for bone health, muscle function, and nerve signaling",
+      whyItMatters: "Critical for bone strength and proper muscle/nerve function; imbalances can affect heart rhythm",
+      whatAffectsIt: "Vitamin D levels, diet, medications, kidney function, parathyroid glands, hydration",
+      whenToCheckWithDoctor: "If outside normal range, especially with bone pain, kidney stones, or muscle cramps",
+    },
+    Creatinine: {
+      whatItIs: "Waste product from muscle breakdown that's filtered by your kidneys",
+      whyItMatters: "Higher levels may indicate reduced kidney function; used to assess kidney health",
+      whatAffectsIt: "Muscle mass, protein intake, hydration, kidney function, certain medications, intense exercise",
+      whenToCheckWithDoctor: "If elevated, especially with other kidney-related symptoms or risk factors",
+    },
+    "AST (SGOT)": {
+      whatItIs: "Enzyme found in liver, heart, and muscle tissue that helps with protein metabolism",
+      whyItMatters: "Elevated levels may indicate liver damage, heart problems, or muscle injury",
+      whatAffectsIt: "Alcohol consumption, medications, viral infections, intense exercise, liver conditions",
+      whenToCheckWithDoctor: "If consistently elevated, especially with other liver function abnormalities",
+    },
+    "ALT (SGPT)": {
+      whatItIs: "Enzyme primarily found in liver cells that processes proteins and detoxifies substances",
+      whyItMatters: "More specific to liver health than AST; elevation often indicates liver cell damage",
+      whatAffectsIt: "Alcohol, medications, fatty liver, viral hepatitis, obesity, certain supplements",
+      whenToCheckWithDoctor: "If elevated, particularly if you have liver disease risk factors or symptoms",
+    },
+    "Uric Acid": {
+      whatItIs: "Waste product from the breakdown of purines found in certain foods and body cells",
+      whyItMatters: "High levels can lead to gout, kidney stones, and may indicate kidney problems",
+      whatAffectsIt: "Diet (red meat, seafood, alcohol), kidney function, medications, dehydration, genetics",
+      whenToCheckWithDoctor: "If elevated with joint pain, kidney stones, or family history of gout",
+    },
+  }
+
   // Mock data based on lab results
   const generateKeyFlags = () => {
     // Default flags based on calcium being slightly elevated
@@ -110,8 +170,7 @@ export default function DashboardPage() {
       referenceRange: "13.5 - 18 g/dL",
       icon: Activity,
       description: "Protein in red blood cells that carries oxygen",
-      tooltip:
-        "Hemoglobin is the protein in your red blood cells that carries oxygen to your tissues. It's an important part of your complete blood count.",
+      tooltip: detailedMarkerInfo["Hemoglobin"],
       range: "Within typical range",
       rangeColor: "bg-green-100 text-green-800",
       category: "CBC",
@@ -122,8 +181,7 @@ export default function DashboardPage() {
       referenceRange: "4.5 - 5.5 10^6/μL",
       icon: Droplets,
       description: "Red blood cell count",
-      tooltip:
-        "Red blood cells are responsible for carrying oxygen throughout your body. Their count is important for assessing overall blood health.",
+      tooltip: detailedMarkerInfo["RBC"],
       range: "Within typical range",
       rangeColor: "bg-green-100 text-green-800",
       category: "CBC",
@@ -134,8 +192,7 @@ export default function DashboardPage() {
       referenceRange: "4 - 11 10^3/μL",
       icon: Shield,
       description: "White blood cell count",
-      tooltip:
-        "White blood cells are part of your immune system and help your body fight infection. Their count can indicate infection or inflammation.",
+      tooltip: detailedMarkerInfo["WBC"],
       range: "Within typical range",
       rangeColor: "bg-green-100 text-green-800",
       category: "CBC",
@@ -146,8 +203,7 @@ export default function DashboardPage() {
       referenceRange: "70 - 100 mg/dL",
       icon: Activity,
       description: "Blood sugar level",
-      tooltip:
-        "Glucose is your blood sugar, which provides energy to your cells. High levels may indicate diabetes risk.",
+      tooltip: detailedMarkerInfo["Glucose"],
       range: "Within typical range",
       rangeColor: "bg-green-100 text-green-800",
       category: "Chemistry",
@@ -158,8 +214,7 @@ export default function DashboardPage() {
       referenceRange: "8.6 - 10.3 mg/dL",
       icon: Zap,
       description: "Mineral essential for bone health and cellular function",
-      tooltip:
-        "Calcium is crucial for bone health, muscle function, and nerve signaling. Slightly elevated levels are often not concerning but worth monitoring.",
+      tooltip: detailedMarkerInfo["Calcium"],
       range: "Slightly above typical range",
       rangeColor: "bg-orange-100 text-orange-800",
       category: "Chemistry",
@@ -170,8 +225,7 @@ export default function DashboardPage() {
       referenceRange: "0.59 - 1.3 mg/dL",
       icon: Droplets,
       description: "Waste product that indicates kidney function",
-      tooltip:
-        "Creatinine is a waste product filtered by your kidneys. Its level in blood helps assess kidney function.",
+      tooltip: detailedMarkerInfo["Creatinine"],
       range: "Within typical range",
       rangeColor: "bg-green-100 text-green-800",
       category: "Chemistry",
@@ -179,10 +233,10 @@ export default function DashboardPage() {
     {
       name: "AST (SGOT)",
       value: "21.10 U/L",
-      referenceRange: "&lt; 35 U/L",
+      referenceRange: "< 35 U/L",
       icon: Activity,
       description: "Enzyme found in liver, heart, and muscle tissue",
-      tooltip: "AST is an enzyme found in various tissues. Elevated levels may indicate liver damage or muscle injury.",
+      tooltip: detailedMarkerInfo["AST (SGOT)"],
       range: "Within typical range",
       rangeColor: "bg-green-100 text-green-800",
       category: "Liver Function",
@@ -190,10 +244,10 @@ export default function DashboardPage() {
     {
       name: "ALT (SGPT)",
       value: "18.80 U/L",
-      referenceRange: "&lt; 45 U/L",
+      referenceRange: "< 45 U/L",
       icon: Activity,
       description: "Enzyme primarily found in liver cells",
-      tooltip: "ALT is an enzyme mainly found in the liver. It's used to detect liver damage or disease.",
+      tooltip: detailedMarkerInfo["ALT (SGPT)"],
       range: "Within typical range",
       rangeColor: "bg-green-100 text-green-800",
       category: "Liver Function",
@@ -204,8 +258,7 @@ export default function DashboardPage() {
       referenceRange: "3.5 - 7.2 mg/dL",
       icon: Brain,
       description: "Waste product from breakdown of purines",
-      tooltip:
-        "Uric acid is a waste product from the breakdown of purines in foods. High levels can lead to gout or kidney stones.",
+      tooltip: detailedMarkerInfo["Uric Acid"],
       range: "Within typical range",
       rangeColor: "bg-green-100 text-green-800",
       category: "Chemistry",
@@ -326,12 +379,12 @@ export default function DashboardPage() {
             </div>
 
             {/* Important Disclaimer */}
-            <Alert className="mb-6">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Important Medical Disclaimer:</strong> This analysis is for educational purposes only and is not
-                medical advice. Always consult with qualified healthcare professionals for medical decisions and
-                interpretation of your lab results.
+            <Alert className="mb-6 border-red-200 bg-red-50">
+              <AlertTriangle className="h-4 w-4 text-red-600" />
+              <AlertDescription className="text-red-800">
+                <strong className="text-red-900 bg-red-100 px-2 py-1 rounded">Important Medical Disclaimer:</strong>{" "}
+                This analysis is for educational purposes only and is not medical advice. Always consult with qualified
+                healthcare professionals for medical decisions and interpretation of your lab results.
               </AlertDescription>
             </Alert>
           </div>
@@ -449,30 +502,49 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div>
-                        <h4 className="font-semibold mb-2">Complete Blood Count</h4>
-                        <p className="text-sm text-muted-foreground">
-                          <strong>Your CBC values all look healthy.</strong> Your hemoglobin (14.3 g/dL) is solidly in
-                          the normal range, indicating good oxygen-carrying capacity. Red and white blood cell counts
-                          are normal, suggesting no signs of infection, inflammation, or anemia. Your platelet count
-                          (297.2 x 10³/µL) is also normal, indicating good blood clotting function.
-                        </p>
+                        <div className="p-4 rounded-lg bg-green-50 border-l-4 border-green-500">
+                          <h4 className="font-semibold mb-2 text-green-800 flex items-center gap-2">
+                            <Activity className="h-4 w-4" />
+                            Complete Blood Count
+                          </h4>
+                          <p className="text-sm text-green-700">
+                            <strong className="text-green-800">Your CBC values all look healthy.</strong> Your
+                            hemoglobin (14.3 g/dL) is solidly in the normal range, indicating good oxygen-carrying
+                            capacity. Red and white blood cell counts are normal, suggesting no signs of infection,
+                            inflammation, or anemia. Your platelet count (297.2 x 10³/µL) is also normal, indicating
+                            good blood clotting function.
+                          </p>
+                        </div>
                       </div>
                       <div>
-                        <h4 className="font-semibold mb-2">Chemistry Panel</h4>
-                        <p className="text-sm text-muted-foreground">
-                          <strong>Your calcium is slightly elevated at 10.34 mg/dL</strong> (reference range 8.6-10.3
-                          mg/dL). This is just barely above the reference range and often not a concern, but it's
-                          something to mention to your doctor at your next visit. Your kidney function appears normal
-                          with creatinine at 1.17 mg/dL, and blood glucose is optimal at 89.2 mg/dL.
-                        </p>
+                        <div className="p-4 rounded-lg bg-orange-50 border-l-4 border-orange-500">
+                          <h4 className="font-semibold mb-2 text-orange-800 flex items-center gap-2">
+                            <Zap className="h-4 w-4" />
+                            Chemistry Panel
+                          </h4>
+                          <p className="text-sm text-orange-700">
+                            <strong className="text-orange-800 bg-orange-100 px-2 py-1 rounded">
+                              Your calcium is slightly elevated at 10.34 mg/dL
+                            </strong>{" "}
+                            (reference range 8.6-10.3 mg/dL). This is just barely above the reference range and often
+                            not a concern, but it's something to mention to your doctor at your next visit. Your kidney
+                            function appears normal with creatinine at 1.17 mg/dL, and blood glucose is optimal at 89.2
+                            mg/dL.
+                          </p>
+                        </div>
                       </div>
                       <div>
-                        <h4 className="font-semibold mb-2">Liver Function</h4>
-                        <p className="text-sm text-muted-foreground">
-                          <strong>Your liver enzymes are normal</strong> with AST at 21.1 U/L and ALT at 18.8 U/L, both
-                          well within reference ranges. This suggests healthy liver function with no signs of
-                          inflammation or damage.
-                        </p>
+                        <div className="p-4 rounded-lg bg-blue-50 border-l-4 border-blue-500">
+                          <h4 className="font-semibold mb-2 text-blue-800 flex items-center gap-2">
+                            <Shield className="h-4 w-4" />
+                            Liver Function
+                          </h4>
+                          <p className="text-sm text-blue-700">
+                            <strong className="text-blue-800">Your liver enzymes are normal</strong> with AST at 21.1
+                            U/L and ALT at 18.8 U/L, both well within reference ranges. This suggests healthy liver
+                            function with no signs of inflammation or damage.
+                          </p>
+                        </div>
                       </div>
                     </CardContent>
                   </Card>
@@ -527,28 +599,43 @@ export default function DashboardPage() {
                     <CardContent>
                       <div className="space-y-4">
                         <div>
-                          <h4 className="font-semibold mb-2">Kidney Health</h4>
-                          <ul className="text-sm text-muted-foreground space-y-1">
-                            <li>• Stay well-hydrated with 2-3 liters of water daily</li>
-                            <li>• Moderate protein intake - aim for balanced portions</li>
-                            <li>• Limit sodium intake by minimizing processed foods</li>
-                          </ul>
+                          <div className="p-4 rounded-lg bg-cyan-50 border border-cyan-200">
+                            <h4 className="font-semibold mb-2 text-cyan-800 flex items-center gap-2">
+                              <Droplets className="h-5 w-5 text-cyan-600" />
+                              Kidney Health
+                            </h4>
+                            <ul className="text-sm text-cyan-700 space-y-1">
+                              <li>• Stay well-hydrated with 2-3 liters of water daily</li>
+                              <li>• Moderate protein intake - aim for balanced portions</li>
+                              <li>• Limit sodium intake by minimizing processed foods</li>
+                            </ul>
+                          </div>
                         </div>
                         <div>
-                          <h4 className="font-semibold mb-2">Calcium Management</h4>
-                          <ul className="text-sm text-muted-foreground space-y-1">
-                            <li>• Maintain adequate hydration to support kidney function</li>
-                            <li>• Include vitamin K-rich foods like leafy greens in your diet</li>
-                            <li>• Moderate calcium intake from supplements if you take them</li>
-                          </ul>
+                          <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+                            <h4 className="font-semibold mb-2 text-amber-800 flex items-center gap-2">
+                              <Zap className="h-5 w-5 text-amber-600" />
+                              Calcium Management
+                            </h4>
+                            <ul className="text-sm text-amber-700 space-y-1">
+                              <li>• Maintain adequate hydration to support kidney function</li>
+                              <li>• Include vitamin K-rich foods like leafy greens in your diet</li>
+                              <li>• Moderate calcium intake from supplements if you take them</li>
+                            </ul>
+                          </div>
                         </div>
                         <div>
-                          <h4 className="font-semibold mb-2">General Health</h4>
-                          <ul className="text-sm text-muted-foreground space-y-1">
-                            <li>• Regular physical activity - aim for 150 minutes weekly</li>
-                            <li>• Balanced diet with plenty of fruits, vegetables, and whole grains</li>
-                            <li>• Adequate sleep (7-9 hours) for overall health</li>
-                          </ul>
+                          <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
+                            <h4 className="font-semibold mb-2 text-emerald-800 flex items-center gap-2">
+                              <Heart className="h-5 w-5 text-emerald-600" />
+                              General Health
+                            </h4>
+                            <ul className="text-sm text-emerald-700 space-y-1">
+                              <li>• Regular physical activity - aim for 150 minutes weekly</li>
+                              <li>• Balanced diet with plenty of fruits, vegetables, and whole grains</li>
+                              <li>• Adequate sleep (7-9 hours) for overall health</li>
+                            </ul>
+                          </div>
                         </div>
                       </div>
                     </CardContent>
@@ -564,31 +651,42 @@ export default function DashboardPage() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
-                      <Alert className="mb-6">
-                        <AlertTriangle className="h-4 w-4" />
-                        <AlertDescription>
-                          <strong>Important:</strong> Always consult your healthcare provider before starting any
-                          supplements. This is educational information only and not medical advice.
+                      <Alert className="mb-6 border-red-200 bg-red-50">
+                        <AlertTriangle className="h-4 w-4 text-red-600" />
+                        <AlertDescription className="text-red-800">
+                          <strong className="text-red-900">Important:</strong> Always consult your healthcare provider
+                          before starting any supplements. This is educational information only and not medical advice.
                         </AlertDescription>
                       </Alert>
 
                       <div className="space-y-6">
                         {supplements.map((category, categoryIndex) => (
                           <div key={categoryIndex}>
-                            <h4 className="font-semibold mb-3 text-primary">{category.category}</h4>
+                            <div className="p-3 rounded-lg bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 mb-3">
+                              <h4 className="font-semibold text-purple-800 flex items-center gap-2">
+                                <Heart className="h-4 w-4 text-purple-600" />
+                                {category.category}
+                              </h4>
+                            </div>
                             <div className="grid gap-3 md:grid-cols-1">
                               {category.items.map((supplement, itemIndex) => (
-                                <div key={itemIndex} className="p-4 rounded-lg border bg-card/50">
+                                <div
+                                  key={itemIndex}
+                                  className="p-4 rounded-lg border bg-gradient-to-r from-slate-50 to-gray-50 hover:from-slate-100 hover:to-gray-100 transition-colors"
+                                >
                                   <div className="flex items-start justify-between mb-2">
-                                    <h5 className="font-medium">{supplement.name}</h5>
-                                    <Badge variant="outline" className="text-xs">
+                                    <h5 className="font-medium text-slate-800">{supplement.name}</h5>
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+                                    >
                                       {supplement.dosage}
                                     </Badge>
                                   </div>
-                                  <p className="text-sm text-muted-foreground mb-2">{supplement.description}</p>
-                                  <p className="text-xs text-orange-600 bg-orange-50 p-2 rounded">
-                                    <strong>Note:</strong> {supplement.caution}
-                                  </p>
+                                  <p className="text-sm text-slate-600 mb-2">{supplement.description}</p>
+                                  <div className="text-xs text-amber-800 bg-amber-100 border border-amber-200 p-3 rounded-lg">
+                                    <strong className="text-amber-900">Important Note:</strong> {supplement.caution}
+                                  </div>
                                 </div>
                               ))}
                             </div>
@@ -668,8 +766,25 @@ export default function DashboardPage() {
                                     <TooltipTrigger>
                                       <Info className="h-4 w-4 text-muted-foreground hover:text-primary" />
                                     </TooltipTrigger>
-                                    <TooltipContent className="max-w-xs">
-                                      <p className="text-xs">{marker.tooltip}</p>
+                                    <TooltipContent className="max-w-sm p-4 space-y-3 bg-white border border-gray-200 shadow-lg">
+                                      <div>
+                                        <h4 className="font-semibold text-sm text-gray-900 mb-1">What it is:</h4>
+                                        <p className="text-xs text-gray-700">{marker.tooltip.whatItIs}</p>
+                                      </div>
+                                      <div>
+                                        <h4 className="font-semibold text-sm text-gray-900 mb-1">Why it matters:</h4>
+                                        <p className="text-xs text-gray-700">{marker.tooltip.whyItMatters}</p>
+                                      </div>
+                                      <div>
+                                        <h4 className="font-semibold text-sm text-gray-900 mb-1">What affects it:</h4>
+                                        <p className="text-xs text-gray-700">{marker.tooltip.whatAffectsIt}</p>
+                                      </div>
+                                      <div className="border-t border-gray-200 pt-2">
+                                        <h4 className="font-semibold text-sm text-gray-900 mb-1">
+                                          When to check with a doctor:
+                                        </h4>
+                                        <p className="text-xs text-gray-700">{marker.tooltip.whenToCheckWithDoctor}</p>
+                                      </div>
                                     </TooltipContent>
                                   </Tooltip>
                                 </div>
@@ -745,11 +860,15 @@ export default function DashboardPage() {
       {/* Footer */}
       <footer className="border-t bg-card/50 py-8">
         <div className="container mx-auto px-4 text-center">
-          <p className="text-sm text-muted-foreground">
-            <strong>Always consult with qualified healthcare professionals</strong> for medical advice and treatment
-            decisions. This analysis is for educational purposes only and is not a substitute for professional medical
-            consultation.
-          </p>
+          <div className="p-4 rounded-lg bg-yellow-50 border border-yellow-200 max-w-4xl mx-auto">
+            <p className="text-sm text-yellow-800">
+              <strong className="text-yellow-900 bg-yellow-100 px-2 py-1 rounded">
+                Always consult with qualified healthcare professionals
+              </strong>{" "}
+              for medical advice and treatment decisions. This analysis is for educational purposes only and is not a
+              substitute for professional medical consultation.
+            </p>
+          </div>
         </div>
       </footer>
     </div>
