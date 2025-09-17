@@ -2,7 +2,6 @@ import type React from "react"
 import type { Metadata } from "next"
 import { GeistSans } from "geist/font/sans"
 import { GeistMono } from "geist/font/mono"
-import { Analytics } from "@vercel/analytics/next"
 import { Suspense } from "react"
 import { AuthProvider } from "@/lib/auth-context"
 import { LabTestProvider } from "@/lib/lab-test-context"
@@ -27,7 +26,6 @@ export default function RootLayout({
             <Suspense fallback={null}>{children}</Suspense>
           </LabTestProvider>
         </AuthProvider>
-        <Analytics />
       </body>
     </html>
   )

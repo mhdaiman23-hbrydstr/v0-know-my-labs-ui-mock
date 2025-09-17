@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useState, type ReactNode } from "react"
+import { createContext, useContext, useState, useCallback, type ReactNode } from "react"
 import { createBrowserClient } from "@supabase/ssr"
 import { useAuth } from "./auth-context"
 
@@ -116,23 +116,23 @@ export function LabTestProvider({ children }: { children: ReactNode }) {
   const [labTestData, setLabTestData] = useState<LabTestData>(defaultLabTestData)
   const { user, isAuthenticated } = useAuth()
 
-  const updateLabTestData = (data: Partial<LabTestData>) => {
+  const updateLabTestData = useCallback((data: Partial<LabTestData>) => {
     setLabTestData((prev) => ({ ...prev, ...data }))
-  }
+  }, [])
 
-  const setExtractedLabs = (labs: LabMarker[]) => {
+  const setExtractedLabs = useCallback((labs: LabMarker[]) => {
     setLabTestData((prev) => ({ ...prev, extractedLabs: labs }))
-  }
+  }, [])
 
-  const setReviewedLabs = (labs: LabMarker[]) => {
+  const setReviewedLabs = useCallback((labs: LabMarker[]) => {
     setLabTestData((prev) => ({ ...prev, reviewedLabs: labs }))
-  }
+  }, [])
 
-  const setInterpretationResults = (results: InterpretationResult) => {
+  const setInterpretationResults = useCallback((results: InterpretationResult) => {
     setLabTestData((prev) => ({ ...prev, interpretationResults: results }))
-  }
+  }, [])
 
-  const saveLabTest = async (): Promise<boolean> => {
+  const saveLabTest = useCallback(async (): Promise<boolean> => {
     if (!isAuthenticated || !user) {
       console.log("[v0] User not authenticated, skipping save")
       return false
@@ -174,11 +174,11 @@ export function LabTestProvider({ children }: { children: ReactNode }) {
       console.error("[v0] Error saving lab test:", error)
       return false
     }
-  }
+  }, [isAuthenticated, user, labTestData])
 
-  const resetLabTestData = () => {
+  const resetLabTestData = useCallback(() => {
     setLabTestData(defaultLabTestData)
-  }
+  }, [])
 
   return (
     <LabTestContext.Provider

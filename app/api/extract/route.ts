@@ -1,910 +1,239 @@
-// app/api/extract/route.ts
-import { NextRequest, NextResponse } from 'next/server';
-import Papa from 'papaparse';
+/**
+ * This file provides utility functions for extracting text and structured data
+ * from various file formats. It's used by the API endpoints for processing
+ * uploaded files.
+ */
 
-// Comprehensive lab marker patterns with multiple extraction strategies
-const labPatterns = {
-  // CBC Panel
-  cbc: {
-    markers: [
-      {
-        code: 'WBC',
-        names: ['White Blood Cell', 'WBC', 'Total WBC Count', 'Leukocytes', 'White Cell Count'],
-        patterns: [
-          /Total\s*WBC\s*Count\s+(\d+\.?\d*)\s*(.*?)(?:\s|$)/gi,
-          /white\s*blood\s*cell(?:\s*count)?[:\s]+(\d+\.?\d*)\s*(.*?)(?:\s|$)/gi,
-          /\bWBC\b[:\s]+(\d+\.?\d*)\s*(.*?)(?:\s|$)/gi,
-        ],
-        unit: '10^3/uL',
-        normalRange: { min: 4.0, max: 11.0 }
-      },
-      {
-        code: 'RBC',
-        names: ['Red Blood Cell', 'RBC', 'Erythrocytes', 'Red Cell Count'],
-        patterns: [
-          /\bRBC\b\s+(\d+\.?\d*)\s+[\d\.]+\s*-\s*[\d\.]+\s+(10\^6.*?uL)/gi,
-          /red\s*blood\s*cell(?:\s*count)?[:\s]+(\d+\.?\d*)\s*(.*?)(?:\s|$)/gi,
-          /\bRBC\b[:\s]+(\d+\.?\d*)\s*(.*?)(?:\s|$)/gi,
-        ],
-        unit: '10^6/uL',
-        normalRange: { min: 4.5, max: 5.5 }
-      },
-      {
-        code: 'HGB',
-        names: ['Hemoglobin', 'Haemoglobin', 'HGB', 'Hgb', 'Hb'],
-        patterns: [
-          /Haemoglobin\s+(\d+\.?\d*)\s+[\d\.]+\s*-\s*[\d\.]+\s+(g\/dL)/gi,
-          /Hemoglobin\s+(\d+\.?\d*)\s+[\d\.]+\s*-\s*[\d\.]+\s+(g\/dL)/gi,
-          /h[ae]moglobin[:\s]+(\d+\.?\d*)\s*(g\/dL)?/gi,
-        ],
-        unit: 'g/dL',
-        normalRange: { min: 13.5, max: 18.0 }
-      },
-      {
-        code: 'HCT',
-        names: ['Hematocrit', 'HCT', 'Hct', 'Packed Cell Volume', 'PCV'],
-        patterns: [
-          /Hematocrit\s+(\d+\.?\d*)\s+[\d\.]+\s*-\s*[\d\.]+\s+(%)/gi,
-          /h[ae]matocrit[:\s]+(\d+\.?\d*)\s*(%)?/gi,
-        ],
-        unit: '%',
-        normalRange: { min: 40, max: 50 }
-      },
-      {
-        code: 'PLT',
-        names: ['Platelet', 'PLT', 'Platelets', 'Platelet Count', 'Thrombocytes'],
-        patterns: [
-          /Platelet\s+(\d+\.?\d*)\s+[\d\.]+\s*-\s*[\d\.]+\s+(10\^3\/uL)/gi,
-          /platelet(?:\s*count)?[:\s]+(\d+\.?\d*)\s*(.*?)(?:\s|$)/gi,
-        ],
-        unit: '10^3/uL',
-        normalRange: { min: 150, max: 450 }
-      },
-      {
-        code: 'MCV',
-        names: ['MCV', 'Mean Corpuscular Volume'],
-        patterns: [
-          /MCV\s+(\d+\.?\d*)\s+[\d\.]+\s*-\s*[\d\.]+\s+(fL)/gi,
-          /mean\s*corpuscular\s*volume[:\s]+(\d+\.?\d*)\s*(fL)?/gi,
-        ],
-        unit: 'fL',
-        normalRange: { min: 80, max: 100 }
-      },
-      {
-        code: 'MCH',
-        names: ['MCH', 'Mean Corpuscular Hemoglobin'],
-        patterns: [
-          /MCH\s+(\d+\.?\d*)\s+[\d\.]+\s*-\s*[\d\.]+\s+(Pg)/gi,
-          /mean\s*corpuscular\s*h[ae]moglobin[:\s]+(\d+\.?\d*)\s*(pg)?/gi,
-        ],
-        unit: 'pg',
-        normalRange: { min: 27, max: 32 }
-      },
-      {
-        code: 'MCHC',
-        names: ['MCHC', 'Mean Corpuscular Hemoglobin Concentration'],
-        patterns: [
-          /MCHC\s+(\d+\.?\d*)\s+[LH]?\s+[\d\.]+\s*-\s*[\d\.]+\s+(g\/dL)/gi,
-          /mean\s*corpuscular\s*h[ae]moglobin\s*concentration[:\s]+(\d+\.?\d*)\s*(g\/dL)?/gi,
-        ],
-        unit: 'g/dL',
-        normalRange: { min: 31.5, max: 34.5 }
-      },
-      {
-        code: 'NEUT',
-        names: ['Neutrophils', 'Neutrophil', 'NEUT'],
-        patterns: [
-          /Neutrophils\s+(\d+\.?\d*)\s+[\d\.]+\s*-\s*[\d\.]+\s+(%)/gi,
-          /neutrophil[s]?[:\s]+(\d+\.?\d*)\s*(%)?/gi,
-        ],
-        unit: '%',
-        normalRange: { min: 40, max: 75 }
-      },
-      {
-        code: 'LYMPH',
-        names: ['Lymphocytes', 'Lymphocyte', 'LYMPH'],
-        patterns: [
-          /Lymphocytes\s+(\d+\.?\d*)\s+[\d\.]+\s*-\s*[\d\.]+\s+(%)/gi,
-          /lymphocyte[s]?[:\s]+(\d+\.?\d*)\s*(%)?/gi,
-        ],
-        unit: '%',
-        normalRange: { min: 20, max: 40 }
-      },
-      {
-        code: 'MONO',
-        names: ['Monocytes', 'Monocyte', 'MONO'],
-        patterns: [
-          /Monocytes\s+(\d+\.?\d*)\s+[HLN]?\s+[\d\.]+\s*-\s*[\d\.]+\s+(%)/gi,
-          /monocyte[s]?[:\s]+(\d+\.?\d*)\s*(%)?/gi,
-        ],
-        unit: '%',
-        normalRange: { min: 2, max: 10 }
-      },
-      {
-        code: 'EOS',
-        names: ['Eosinophils', 'Eosinophil', 'EOS'],
-        patterns: [
-          /Eosinophils\s+(\d+\.?\d*)\s+[\d\.]+\s*-\s*[\d\.]+\s+(%)/gi,
-          /eosinophil[s]?[:\s]+(\d+\.?\d*)\s*(%)?/gi,
-        ],
-        unit: '%',
-        normalRange: { min: 1, max: 6 }
-      },
-      {
-        code: 'BASO',
-        names: ['Basophils', 'Basophil', 'BASO'],
-        patterns: [
-          /Basophils\s+(\d+\.?\d*)\s+[\d\.]+\s*-\s*[\d\.]+\s+(%)/gi,
-          /basophil[s]?[:\s]+(\d+\.?\d*)\s*(%)?/gi,
-        ],
-        unit: '%',
-        normalRange: { min: 0, max: 2 }
-      }
-    ]
-  },
-  
-  // Metabolic Panel
-  metabolic: {
-    markers: [
-      {
-        code: 'GLU',
-        names: ['Glucose', 'Fasting Blood Sugar', 'Blood Glucose', 'FBS'],
-        patterns: [
-          /Fasting\s+Blood\s+Sugar\s+(\d+\.?\d*)\s+[\d\.]+\s*-\s*[\d\.]+\s+(mg\/dL)/gi,
-          /glucose[:\s]+(\d+\.?\d*)\s*(mg\/dL)?/gi,
-        ],
-        unit: 'mg/dL',
-        normalRange: { min: 70, max: 100 }
-      },
-      {
-        code: 'URIC',
-        names: ['Uric Acid', 'Urate'],
-        patterns: [
-          /Uric\s+Acid\s+(\d+\.?\d*)\s+[\d\.]+\s*-\s*[\d\.]+\s+(mg\/dL)/gi,
-          /uric\s*acid[:\s]+(\d+\.?\d*)\s*(mg\/dL)?/gi,
-        ],
-        unit: 'mg/dL',
-        normalRange: { min: 3.5, max: 7.2 }
-      },
-      {
-        code: 'CA',
-        names: ['Calcium', 'Ca'],
-        patterns: [
-          /Calcium\s+(\d+\.?\d*)\s+[HLN]?\s+[\d\.]+\s*-\s*[\d\.]+\s+(mg\/dL)/gi,
-          /\bca\b[:\s]+(\d+\.?\d*)\s*(mg\/dL)?/gi,
-        ],
-        unit: 'mg/dL',
-        normalRange: { min: 8.6, max: 10.3 }
-      },
-      {
-        code: 'CREAT',
-        names: ['Creatinine', 'Creat', 'Cr'],
-        patterns: [
-          /Creatinine\s+(\d+\.?\d*)\s+[\d\.]+\s*-\s*[\d\.]+\s+(mg\/dL)/gi,
-          /creatinine[:\s]+(\d+\.?\d*)\s*(mg\/dL)?/gi,
-        ],
-        unit: 'mg/dL',
-        normalRange: { min: 0.59, max: 1.3 }
-      }
-    ]
-  },
-  
-  // Liver Function
-  liver: {
-    markers: [
-      {
-        code: 'ALT',
-        names: ['ALT', 'SGPT', 'Alanine Aminotransferase'],
-        patterns: [
-          /SGPT\s*\(ALT\)\s+(\d+\.?\d*)\s+<\s*[\d\.]+\s+(U\/L)/gi,
-          /\bALT\b[:\s]+(\d+\.?\d*)\s*(U\/L)?/gi,
-        ],
-        unit: 'U/L',
-        normalRange: { min: 0, max: 45 }
-      },
-      {
-        code: 'AST',
-        names: ['AST', 'SGOT', 'Aspartate Aminotransferase'],
-        patterns: [
-          /SGOT\s*\(AST\)\s+(\d+\.?\d*)\s+<\s*[\d\.]+\s+(U\/L)/gi,
-          /\bAST\b[:\s]+(\d+\.?\d*)\s*(U\/L)?/gi,
-        ],
-        unit: 'U/L',
-        normalRange: { min: 0, max: 35 }
-      }
-    ]
-  },
-  
-  // Inflammatory Markers
-  inflammatory: {
-    markers: [
-      {
-        code: 'CRP',
-        names: ['CRP', 'C Reactive Protein', 'C-Reactive Protein'],
-        patterns: [
-          /CRP\s*-\s*C\s*Reactive\s*Protein\s+(\d+\.?\d*)\s+<\s*[\d\.]+\s+(mg\/L)/gi,
-          /c[\s-]?reactive\s*protein[:\s]+(\d+\.?\d*)\s*(mg\/L)?/gi,
-        ],
-        unit: 'mg/L',
-        normalRange: { min: 0, max: 5 }
-      }
-    ]
-  },
-  
-  // Kidney Function
-  kidney: {
-    markers: [
-      {
-        code: 'EGFR',
-        names: ['eGFR', 'Estimated GFR', 'Glomerular Filtration Rate'],
-        patterns: [
-          /eGFR\s+(\d+\.?\d*)\s+>\s*[\d\.]+\s+(ml\/min)/gi,
-          /egfr[:\s]+(\d+\.?\d*)\s*(ml\/min)?/gi,
-        ],
-        unit: 'ml/min/1.73m^2',
-        normalRange: { min: 85, max: 999 }
-      }
-    ]
-  }
-};
+// Define interfaces for extracted lab values
+export interface LabMarker {
+  code?: string;
+  name: string;
+  value: number;
+  unit: string;
+  value_si?: number;
+  unit_si?: string;
+  ref_range_low?: number;
+  ref_range_high?: number;
+  category?: string;
+  collection_date?: string;
+  flag?: string;
+}
 
-// Unit conversion to SI
-const unitConversions: Record<string, (value: number) => { value: number; unit: string }> = {
-  // Glucose
-  'mg/dL_glucose': (v) => ({ value: parseFloat((v * 0.0555).toFixed(2)), unit: 'mmol/L' }),
-  // Cholesterol and lipids
-  'mg/dL_lipid': (v) => ({ value: parseFloat((v * 0.0259).toFixed(2)), unit: 'mmol/L' }),
-  // Creatinine
-  'mg/dL_creatinine': (v) => ({ value: parseFloat((v * 88.4).toFixed(1)), unit: 'μmol/L' }),
-  // Uric acid
-  'mg/dL_uric': (v) => ({ value: parseFloat((v * 59.48).toFixed(1)), unit: 'μmol/L' }),
-  // Calcium
-  'mg/dL_calcium': (v) => ({ value: parseFloat((v * 0.25).toFixed(2)), unit: 'mmol/L' }),
-  // Hemoglobin
-  'g/dL_hemoglobin': (v) => ({ value: parseFloat((v * 10).toFixed(0)), unit: 'g/L' }),
-  // Default (no conversion)
-  'default': (v) => ({ value: v, unit: '' })
-};
-
-export async function POST(req: NextRequest) {
-  console.log('=== Extract API called ===');
+/**
+ * Extract lab markers from text using pattern matching.
+ * @param text The text to extract from
+ * @returns Array of extracted lab markers
+ */
+export function extractLabMarkersFromText(text: string): LabMarker[] {
+  const labMarkers: LabMarker[] = [];
   
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as File | null;
+    // Method 1: Look for structured test result patterns (most common format)
+    // Format: Test Name | Value | Unit | Reference Range
+    const testResultRegex = /([A-Za-z\s\-\(\)]+)\s+(\d+\.?\d*)\s*([HL])?\s*([A-Za-z\/%]+)?\s+(\d+\.?\d*)\s*-\s*(\d+\.?\d*)/g;
+    let match;
     
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
-    }
-    
-    console.log('File details:', {
-      name: file.name,
-      type: file.type,
-      size: file.size
-    });
-    
-    // Validate file type
-    const isPDF = file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf';
-    const isCSV = file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv';
-    
-    if (!isPDF && !isCSV) {
-      return NextResponse.json(
-        { error: 'Unsupported file type. Please upload a PDF or CSV file.' },
-        { status: 400 }
-      );
-    }
-    
-    let textContent = '';
-    
-    // Parse file content
-    if (isPDF) {
-      try {
-        // For PDF files, we need to extract text without using pdf-parse
-        // Since pdf-parse uses fs which is not available in Edge Runtime
-        // We'll use a different approach or return sample data
-        
-        const fileBuffer = await file.arrayBuffer();
-        const bytes = new Uint8Array(fileBuffer);
-        
-        // Try to extract text from PDF by looking for text streams
-        // This is a simplified approach that works for many PDFs
-        textContent = extractTextFromPDFBuffer(bytes);
-        
-        if (!textContent || textContent.length < 50) {
-          // If extraction failed, return sample data with explanation
-          console.log('PDF text extraction yielded little content, using sample data');
-          return NextResponse.json({
-            labs: getSampleLabData(),
-            warning: 'PDF parsing requires server-side processing. Using sample data for demonstration.',
-            suggestion: 'For production, consider using a PDF parsing service or server-side API route.'
-          });
-        }
-        
-        console.log('PDF text extracted, length:', textContent.length);
-      } catch (pdfError: any) {
-        console.error('PDF parse error:', pdfError);
-        return NextResponse.json({
-          labs: getSampleLabData(),
-          warning: 'PDF parsing failed, using sample data',
-          error: pdfError.message
-        });
-      }
-    } else if (isCSV) {
-      try {
-        const fileBuffer = await file.arrayBuffer();
-        const csvText = new TextDecoder().decode(fileBuffer);
-        const result = Papa.parse(csvText, { 
-          header: true,
-          skipEmptyLines: true
-        });
-        
-        // Convert CSV to searchable text
-        textContent = JSON.stringify(result.data);
-        console.log('CSV parsed, rows:', result.data.length);
-      } catch (csvError: any) {
-        console.error('CSV parse error:', csvError);
-        return NextResponse.json({
-          labs: getSampleLabData(),
-          warning: 'CSV parsing failed, using sample data',
-          error: csvError.message
-        });
-      }
-    }
-    
-    // Multi-stage extraction
-    console.log('Starting multi-stage extraction...');
-    
-    // Stage 1: Try comprehensive pattern matching
-    let extractedLabs = comprehensiveExtraction(textContent);
-    
-    // Stage 2: If few results, try line-by-line extraction
-    if (extractedLabs.length < 3) {
-      console.log('Stage 1 found few results, trying line-by-line...');
-      const lineResults = lineByLineExtraction(textContent);
-      extractedLabs = mergeResults(extractedLabs, lineResults);
-    }
-    
-    // Stage 3: If still few results, try table extraction
-    if (extractedLabs.length < 5) {
-      console.log('Trying table extraction...');
-      const tableResults = extractTableFormat(textContent);
-      extractedLabs = mergeResults(extractedLabs, tableResults);
-    }
-    
-    // Stage 4: If still no results, use sample data
-    if (extractedLabs.length === 0) {
-      console.log('No labs extracted, using sample data');
-      return NextResponse.json({
-        labs: getSampleLabData(),
-        warning: 'Could not extract lab values from file, using sample data for demonstration'
+    while ((match = testResultRegex.exec(text)) !== null) {
+      const testName = match[1].trim();
+      const value = parseFloat(match[2]);
+      const flag = match[3] || undefined;
+      const unit = match[4]?.trim() || '';
+      const refLow = parseFloat(match[5]);
+      const refHigh = parseFloat(match[6]);
+      
+      // Derive a code from the test name if possible
+      const code = deriveCodeFromName(testName);
+      
+      labMarkers.push({
+        code,
+        name: testName,
+        value,
+        unit,
+        ref_range_low: refLow,
+        ref_range_high: refHigh,
+        flag
       });
     }
     
-    console.log(`Extraction complete. Found ${extractedLabs.length} lab values`);
+    // Method 2: Try to find specific lab tests by name and pattern
+    // This helps with formats that don't follow the standard layout
+    const commonLabTests = [
+      { name: 'Hemoglobin', code: 'HGB', aliases: ['Haemoglobin', 'HGB', 'HB'] },
+      { name: 'Red Blood Cell Count', code: 'RBC', aliases: ['Red Blood Cell', 'Red Blood Cells', 'RBC'] },
+      { name: 'White Blood Cell Count', code: 'WBC', aliases: ['White Blood Cell', 'White Blood Cells', 'WBC', 'Total WBC Count'] },
+      { name: 'Platelet Count', code: 'PLT', aliases: ['Platelet', 'Platelets', 'PLT'] },
+      { name: 'Hematocrit', code: 'HCT', aliases: ['Hematocrit', 'HCT'] },
+      { name: 'Mean Corpuscular Volume', code: 'MCV', aliases: ['MCV'] },
+      { name: 'Mean Corpuscular Hemoglobin', code: 'MCH', aliases: ['MCH'] },
+      { name: 'Mean Corpuscular Hemoglobin Concentration', code: 'MCHC', aliases: ['MCHC'] },
+      { name: 'Glucose', code: 'GLU', aliases: ['Fasting Blood Sugar', 'FBS', 'Blood Glucose', 'Glucose'] },
+      { name: 'Creatinine', code: 'CREAT', aliases: ['CREAT', 'Serum Creatinine', 'Creatinine'] },
+      { name: 'Blood Urea Nitrogen', code: 'BUN', aliases: ['BUN', 'Urea', 'Urea Nitrogen'] },
+      { name: 'Calcium', code: 'CA', aliases: ['CA', 'Serum Calcium', 'Calcium'] },
+      { name: 'AST', code: 'AST', aliases: ['SGOT', 'AST', 'SGOT (AST)'] },
+      { name: 'ALT', code: 'ALT', aliases: ['SGPT', 'ALT', 'SGPT (ALT)'] },
+      { name: 'Uric Acid', code: 'UA', aliases: ['Uric Acid'] },
+      { name: 'C-Reactive Protein', code: 'CRP', aliases: ['CRP', 'C-Reactive Protein'] },
+    ];
     
-    return NextResponse.json({ 
-      labs: extractedLabs,
-      extractionMethod: 'multi-stage',
-      totalFound: extractedLabs.length
-    });
-    
-  } catch (error: any) {
-    console.error('Unhandled error:', error);
-    return NextResponse.json({
-      labs: getSampleLabData(),
-      error: 'Processing failed, using sample data',
-      details: error.message
-    });
-  }
-}
-
-// Simple PDF text extraction for Edge Runtime
-function extractTextFromPDFBuffer(bytes: Uint8Array): string {
-  try {
-    // Convert bytes to string
-    const pdfString = new TextDecoder('latin1').decode(bytes);
-    
-    // Extract text between BT and ET markers (PDF text objects)
-    const textPattern = /BT[^]*?ET/g;
-    const textObjects = pdfString.match(textPattern) || [];
-    
-    let extractedText = '';
-    
-    for (const textObj of textObjects) {
-      // Extract text within parentheses or angle brackets
-      const textMatches = textObj.match(/\((.*?)\)/g) || [];
-      for (const match of textMatches) {
-        // Clean up the text
-        const text = match.slice(1, -1)
-          .replace(/\\([0-9]{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)))
-          .replace(/\\(.)/g, '$1');
-        extractedText += text + ' ';
+    for (const test of commonLabTests) {
+      // Skip if we already found this test
+      if (labMarkers.some(marker => marker.code === test.code)) {
+        continue;
       }
-    }
-    
-    // Also try to extract text from stream objects
-    const streamPattern = /stream[^]*?endstream/g;
-    const streams = pdfString.match(streamPattern) || [];
-    
-    for (const stream of streams) {
-      // Look for readable text in streams
-      const readable = stream.match(/[A-Za-z0-9\s\.\,\-\:\/]+/g) || [];
-      extractedText += ' ' + readable.join(' ');
-    }
-    
-    return extractedText;
-  } catch (error) {
-    console.error('Error extracting text from PDF buffer:', error);
-    return '';
-  }
-}
-
-// Comprehensive extraction using all patterns
-function comprehensiveExtraction(text: string): any[] {
-  const results: any[] = [];
-  const processedMarkers = new Set<string>();
-  
-  // Clean text for better matching
-  const cleanText = text.replace(/\s+/g, ' ').replace(/[\r\n]+/g, '\n');
-  
-  // Try each panel
-  for (const [panelName, panel] of Object.entries(labPatterns)) {
-    for (const marker of panel.markers) {
-      // Try each pattern for this marker
-      for (const pattern of marker.patterns) {
-        const matches = Array.from(cleanText.matchAll(pattern));
+      
+      const patterns = [test.name, ...test.aliases];
+      
+      for (const pattern of patterns) {
+        // Look for pattern: Test Name followed by value and possibly unit
+        // This regex looks for test name followed by a number, and optionally a unit
+        const regex = new RegExp(`${pattern}[\\s:]*([0-9.]+)\\s*([HL])?\\s*([A-Za-z/%\\^\\s\\-\\.]+)?`, 'i');
+        const match = text.match(regex);
         
-        for (const match of matches) {
-          if (match[1] && !processedMarkers.has(marker.code)) {
-            const value = parseFloat(match[1]);
-            
-            // Validate the value is reasonable
-            if (!isNaN(value) && value > 0 && value < 10000) {
-              processedMarkers.add(marker.code);
-              
-              // Convert to SI if needed
-              const siConversion = getConversion(marker.code, value, match[2] || marker.unit);
-              
-              results.push({
-                panel: panelName,
-                code: marker.code,
-                name: marker.names[0],
-                value_raw: match[1],
-                unit_raw: match[2] || marker.unit,
-                value_si: siConversion.value,
-                unit_si: siConversion.unit || marker.unit,
-                confidence: 0.85,
-                extraction_method: 'pattern_match'
-              });
-              
-              console.log(`Found ${marker.code}: ${value} ${match[2] || marker.unit}`);
-              break; // Move to next marker after finding one
-            }
-          }
+        if (match) {
+          // Try to find a reference range near this match
+          const refRangeRegex = /(\d+\.?\d*)\s*-\s*(\d+\.?\d*)/;
+          const surroundingText = text.substring(
+            Math.max(0, text.indexOf(match[0]) - 100),
+            Math.min(text.length, text.indexOf(match[0]) + match[0].length + 100)
+          );
+          const refMatch = surroundingText.match(refRangeRegex);
+          
+          labMarkers.push({
+            code: test.code,
+            name: test.name,
+            value: parseFloat(match[1]),
+            flag: match[2] || undefined,
+            unit: match[3]?.trim() || '',
+            ref_range_low: refMatch ? parseFloat(refMatch[1]) : undefined,
+            ref_range_high: refMatch ? parseFloat(refMatch[2]) : undefined
+          });
+          
+          // Found a match, move to next test
+          break;
         }
       }
     }
-  }
-  
-  return results;
-}
-
-// Line-by-line extraction for structured reports
-function lineByLineExtraction(text: string): any[] {
-  const results: any[] = [];
-  const lines = text.split(/[\r\n]+/);
-  const processedMarkers = new Set<string>();
-  
-  for (const line of lines) {
-    // Skip empty or very short lines
-    if (line.trim().length < 3) continue;
     
-    // Look for pattern: NAME VALUE RANGE UNIT
-    const patterns = [
-      /^([A-Za-z\s\-\/\(\)]+)\s+(\d+\.?\d*)\s+(?:[HLN]\s+)?[\d\.]+\s*-\s*[\d\.]+\s+(.*?)$/,
-      /^([A-Za-z\s\-\/\(\)]+)\s+(\d+\.?\d*)\s+(.*?)$/
-    ];
+    // Method 3: Try to detect a table structure by looking at lines
+    const lines = text.split('\n');
     
-    for (const linePattern of patterns) {
-      const match = line.match(linePattern);
+    // Look for lines that might be table rows
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      if (!line) continue;
+      
+      // Match pattern: Word(s) followed by number, possibly flag, unit, and reference range
+      const tableRowRegex = /^([A-Za-z\s\-\(\)]+)\s+(\d+\.?\d*)\s*([HL])?\s+([A-Za-z\/%]+)?\s+(\d+\.?\d*)\s*-\s*(\d+\.?\d*)/;
+      const match = line.match(tableRowRegex);
       
       if (match) {
         const testName = match[1].trim();
-        const value = parseFloat(match[2]);
-        const unit = match[3] ? match[3].trim() : '';
         
-        // Try to match against known markers
-        for (const [panelName, panel] of Object.entries(labPatterns)) {
-          for (const marker of panel.markers) {
-            for (const name of marker.names) {
-              if (testName.toLowerCase().includes(name.toLowerCase()) && 
-                  !processedMarkers.has(marker.code)) {
-                processedMarkers.add(marker.code);
-                
-                const siConversion = getConversion(marker.code, value, unit || marker.unit);
-                
-                results.push({
-                  panel: panelName,
-                  code: marker.code,
-                  name: marker.names[0],
-                  value_raw: match[2],
-                  unit_raw: unit || marker.unit,
-                  value_si: siConversion.value,
-                  unit_si: siConversion.unit || marker.unit,
-                  confidence: 0.75,
-                  extraction_method: 'line_parse'
-                });
-                
-                console.log(`Line extraction - ${marker.code}: ${value} ${unit}`);
-                break;
-              }
-            }
-          }
+        // Skip if this test is already in the results
+        if (labMarkers.some(marker => marker.name === testName)) {
+          continue;
         }
+        
+        const value = parseFloat(match[2]);
+        const flag = match[3] || undefined;
+        const unit = match[4]?.trim() || '';
+        const refLow = parseFloat(match[5]);
+        const refHigh = parseFloat(match[6]);
+        
+        // Derive a code from the test name
+        const code = deriveCodeFromName(testName);
+        
+        labMarkers.push({
+          code,
+          name: testName,
+          value,
+          unit,
+          ref_range_low: refLow,
+          ref_range_high: refHigh,
+          flag
+        });
       }
+    }
+    
+  } catch (error) {
+    console.error('Error extracting lab markers:', error);
+  }
+  
+  return labMarkers;
+}
+
+/**
+ * Try to derive a test code from a test name
+ * @param name The test name
+ * @returns The derived code or undefined
+ */
+function deriveCodeFromName(name: string): string | undefined {
+  // Common mappings
+  const codeMap: Record<string, string> = {
+    'hemoglobin': 'HGB',
+    'haemoglobin': 'HGB',
+    'hgb': 'HGB',
+    'hb': 'HGB',
+    'red blood cell': 'RBC',
+    'rbc': 'RBC',
+    'white blood cell': 'WBC',
+    'wbc': 'WBC',
+    'platelet': 'PLT',
+    'plt': 'PLT',
+    'hematocrit': 'HCT',
+    'haematocrit': 'HCT',
+    'hct': 'HCT',
+    'mean corpuscular volume': 'MCV',
+    'mcv': 'MCV',
+    'mean corpuscular hemoglobin': 'MCH',
+    'mch': 'MCH',
+    'mean corpuscular hemoglobin concentration': 'MCHC',
+    'mchc': 'MCHC',
+    'glucose': 'GLU',
+    'fasting blood sugar': 'GLU',
+    'fbs': 'GLU',
+    'creatinine': 'CREAT',
+    'creat': 'CREAT',
+    'blood urea nitrogen': 'BUN',
+    'bun': 'BUN',
+    'urea': 'BUN',
+    'calcium': 'CA',
+    'ca': 'CA',
+    'sgot': 'AST',
+    'ast': 'AST',
+    'sgpt': 'ALT',
+    'alt': 'ALT',
+    'uric acid': 'UA',
+    'c-reactive protein': 'CRP',
+    'crp': 'CRP',
+  };
+  
+  // First try to match the whole name
+  const normalizedName = name.toLowerCase().trim();
+  if (codeMap[normalizedName]) {
+    return codeMap[normalizedName];
+  }
+  
+  // Try to match parts of the name
+  for (const [key, value] of Object.entries(codeMap)) {
+    if (normalizedName.includes(key)) {
+      return value;
     }
   }
   
-  return results;
-}
-
-// Extract from table-like formats
-function extractTableFormat(text: string): any[] {
-  const results: any[] = [];
-  const processedMarkers = new Set<string>();
-  
-  // Split text into sections
-  const sections = text.split(/\n{2,}/);
-  
-  for (const section of sections) {
-    const lines = section.split(/\n/);
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      
-      // Try to find test names and their values
-      for (const [panelName, panel] of Object.entries(labPatterns)) {
-        for (const marker of panel.markers) {
-          for (const name of marker.names) {
-            if (line.toLowerCase().includes(name.toLowerCase()) && 
-                !processedMarkers.has(marker.code)) {
-              
-              // Look for a number in the same line or next line
-              const valuePattern = /(\d+\.?\d*)/g;
-              const matches = line.match(valuePattern) || 
-                             (i + 1 < lines.length ? lines[i + 1].match(valuePattern) : null);
-              
-              if (matches && matches.length > 0) {
-                const value = parseFloat(matches[0]);
-                
-                if (!isNaN(value) && value > 0 && value < 10000) {
-                  processedMarkers.add(marker.code);
-                  
-                  const siConversion = getConversion(marker.code, value, marker.unit);
-                  
-                  results.push({
-                    panel: panelName,
-                    code: marker.code,
-                    name: marker.names[0],
-                    value_raw: matches[0],
-                    unit_raw: marker.unit,
-                    value_si: siConversion.value,
-                    unit_si: siConversion.unit || marker.unit,
-                    confidence: 0.7,
-                    extraction_method: 'table_parse'
-                  });
-                  
-                  console.log(`Table extraction - ${marker.code}: ${value}`);
-                  break;
-                }
-              }
-            }
-          }
-        }
-      }
+  // If no match found, return the first letters of each word
+  const words = name.split(/\s+/);
+  if (words.length > 0) {
+    if (words.length === 1) {
+      // For single words, return first 3-4 chars uppercase
+      return words[0].substring(0, Math.min(4, words[0].length)).toUpperCase();
+    } else {
+      // For multiple words, return first letter of each word
+      return words.map(word => word[0]).join('').toUpperCase();
     }
   }
   
-  return results;
-}
-
-// Merge results without duplicates
-function mergeResults(primary: any[], secondary: any[]): any[] {
-  const merged = [...primary];
-  const existingCodes = new Set(primary.map(r => r.code));
-  
-  for (const result of secondary) {
-    if (!existingCodes.has(result.code)) {
-      merged.push(result);
-      existingCodes.add(result.code);
-    }
-  }
-  
-  return merged;
-}
-
-// Get SI conversion for a marker
-function getConversion(code: string, value: number, unit: string): { value: number; unit: string } {
-  // Clean up the unit string
-  const cleanUnit = unit.toLowerCase().replace(/\s+/g, '');
-  
-  switch(code) {
-    case 'GLU':
-      if (cleanUnit.includes('mg/dl')) {
-        return unitConversions['mg/dL_glucose'](value);
-      }
-      break;
-    case 'URIC':
-      if (cleanUnit.includes('mg/dl')) {
-        return unitConversions['mg/dL_uric'](value);
-      }
-      break;
-    case 'CA':
-      if (cleanUnit.includes('mg/dl')) {
-        return unitConversions['mg/dL_calcium'](value);
-      }
-      break;
-    case 'CREAT':
-      if (cleanUnit.includes('mg/dl')) {
-        return unitConversions['mg/dL_creatinine'](value);
-      }
-      break;
-    case 'HGB':
-      if (cleanUnit.includes('g/dl')) {
-        return unitConversions['g/dL_hemoglobin'](value);
-      }
-      break;
-  }
-  
-  // No conversion needed, return as-is
-  return { value, unit };
-}
-
-// Sample lab data based on the actual PDF you provided
-function getSampleLabData() {
-  return [
-    // CBC Panel - Based on your PDF
-    {
-      panel: 'cbc',
-      code: 'RBC',
-      name: 'Red Blood Cell Count',
-      value_raw: '5.17',
-      unit_raw: '10^6/uL',
-      value_si: 5.17,
-      unit_si: '10^12/L',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    {
-      panel: 'cbc',
-      code: 'HGB',
-      name: 'Hemoglobin',
-      value_raw: '14.30',
-      unit_raw: 'g/dL',
-      value_si: 143,
-      unit_si: 'g/L',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    {
-      panel: 'cbc',
-      code: 'HCT',
-      name: 'Hematocrit',
-      value_raw: '45.43',
-      unit_raw: '%',
-      value_si: 45.43,
-      unit_si: '%',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    {
-      panel: 'cbc',
-      code: 'MCV',
-      name: 'Mean Corpuscular Volume',
-      value_raw: '87.88',
-      unit_raw: 'fL',
-      value_si: 87.88,
-      unit_si: 'fL',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    {
-      panel: 'cbc',
-      code: 'MCH',
-      name: 'Mean Corpuscular Hemoglobin',
-      value_raw: '27.68',
-      unit_raw: 'pg',
-      value_si: 27.68,
-      unit_si: 'pg',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    {
-      panel: 'cbc',
-      code: 'MCHC',
-      name: 'Mean Corpuscular Hemoglobin Concentration',
-      value_raw: '31.49',
-      unit_raw: 'g/dL',
-      value_si: 314.9,
-      unit_si: 'g/L',
-      confidence: 1.0,
-      extraction_method: 'sample_data',
-      flag: 'L'
-    },
-    {
-      panel: 'cbc',
-      code: 'WBC',
-      name: 'Total WBC Count',
-      value_raw: '6.61',
-      unit_raw: '10^3/uL',
-      value_si: 6.61,
-      unit_si: '10^9/L',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    {
-      panel: 'cbc',
-      code: 'NEUT',
-      name: 'Neutrophils',
-      value_raw: '51.10',
-      unit_raw: '%',
-      value_si: 51.10,
-      unit_si: '%',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    {
-      panel: 'cbc',
-      code: 'LYMPH',
-      name: 'Lymphocytes',
-      value_raw: '31.83',
-      unit_raw: '%',
-      value_si: 31.83,
-      unit_si: '%',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    {
-      panel: 'cbc',
-      code: 'MONO',
-      name: 'Monocytes',
-      value_raw: '10.92',
-      unit_raw: '%',
-      value_si: 10.92,
-      unit_si: '%',
-      confidence: 1.0,
-      extraction_method: 'sample_data',
-      flag: 'H'
-    },
-    {
-      panel: 'cbc',
-      code: 'EOS',
-      name: 'Eosinophils',
-      value_raw: '4.54',
-      unit_raw: '%',
-      value_si: 4.54,
-      unit_si: '%',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    {
-      panel: 'cbc',
-      code: 'BASO',
-      name: 'Basophils',
-      value_raw: '1.62',
-      unit_raw: '%',
-      value_si: 1.62,
-      unit_si: '%',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    {
-      panel: 'cbc',
-      code: 'PLT',
-      name: 'Platelet',
-      value_raw: '297.20',
-      unit_raw: '10^3/uL',
-      value_si: 297.20,
-      unit_si: '10^9/L',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    
-    // Metabolic Panel - Based on your PDF
-    {
-      panel: 'metabolic',
-      code: 'GLU',
-      name: 'Fasting Blood Sugar',
-      value_raw: '89.20',
-      unit_raw: 'mg/dL',
-      value_si: 4.96,
-      unit_si: 'mmol/L',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    {
-      panel: 'metabolic',
-      code: 'URIC',
-      name: 'Uric Acid',
-      value_raw: '6.80',
-      unit_raw: 'mg/dL',
-      value_si: 404.5,
-      unit_si: 'μmol/L',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    {
-      panel: 'metabolic',
-      code: 'CA',
-      name: 'Calcium',
-      value_raw: '10.34',
-      unit_raw: 'mg/dL',
-      value_si: 2.59,
-      unit_si: 'mmol/L',
-      confidence: 1.0,
-      extraction_method: 'sample_data',
-      flag: 'H'
-    },
-    {
-      panel: 'metabolic',
-      code: 'CREAT',
-      name: 'Creatinine',
-      value_raw: '1.17',
-      unit_raw: 'mg/dL',
-      value_si: 103.4,
-      unit_si: 'μmol/L',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    
-    // Liver Function - Based on your PDF
-    {
-      panel: 'liver',
-      code: 'AST',
-      name: 'SGOT (AST)',
-      value_raw: '21.10',
-      unit_raw: 'U/L',
-      value_si: 21.10,
-      unit_si: 'U/L',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    {
-      panel: 'liver',
-      code: 'ALT',
-      name: 'SGPT (ALT)',
-      value_raw: '18.80',
-      unit_raw: 'U/L',
-      value_si: 18.80,
-      unit_si: 'U/L',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    
-    // Inflammatory Markers
-    {
-      panel: 'inflammatory',
-      code: 'CRP',
-      name: 'C Reactive Protein',
-      value_raw: '2.30',
-      unit_raw: 'mg/L',
-      value_si: 2.30,
-      unit_si: 'mg/L',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    },
-    
-    // Kidney Function
-    {
-      panel: 'kidney',
-      code: 'EGFR',
-      name: 'eGFR',
-      value_raw: '75.00',
-      unit_raw: 'ml/min/1.73m^2',
-      value_si: 75.00,
-      unit_si: 'ml/min/1.73m^2',
-      confidence: 1.0,
-      extraction_method: 'sample_data'
-    }
-  ];
+  return undefined;
 }
