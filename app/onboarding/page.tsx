@@ -10,9 +10,8 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Heart, ArrowLeft, ArrowRight, User, LogOut, X } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
-import { useLabTest } from "@/lib/lab-test-context"
 import { useRouter } from "next/navigation"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 const ethnicityOptions = [
   "White/Caucasian",
@@ -51,35 +50,62 @@ const commonMedicalConditions = [
 ]
 
 export default function OnboardingPage() {
-  const { isAuthenticated, logout } = useAuth()
-  const { labTestData, updateLabTestData } = useLabTest()
+  const { isAuthenticated, logout, user, updateProfile } = useAuth()
   const router = useRouter()
 
-  const [medicalConditions, setMedicalConditions] = useState<string[]>(labTestData.medicalConditions || [])
-  const [medications, setMedications] = useState<string[]>(labTestData.medications || [])
+  const [medicalConditions, setMedicalConditions] = useState<string[]>([])
+  const [medications, setMedications] = useState<string[]>([])
   const [newMedication, setNewMedication] = useState("")
   const [newCondition, setNewCondition] = useState("")
-  const [measurementSystem, setMeasurementSystem] = useState(labTestData.units === "Metric" ? "metric" : "imperial")
+  const [measurementSystem, setMeasurementSystem] = useState("imperial")
 
   const [formData, setFormData] = useState({
-    age: labTestData.age || "",
-    sex: labTestData.sex || "",
-    ethnicity: labTestData.ethnicity || "",
-    height: labTestData.height || "",
-    weight: labTestData.weight || "",
+    age: "",
+    sex: "",
+    ethnicity: "",
+    height: "",
+    weight: "",
     lifestyle: {
-      exercise: labTestData.lifestyle.exercise || "",
-      diet: labTestData.lifestyle.diet || "",
-      smoking: labTestData.lifestyle.smoking || "",
-      alcohol: labTestData.lifestyle.alcohol || "",
-      sleep: labTestData.lifestyle.sleep || "",
-      stress: labTestData.lifestyle.stress || "",
+      exercise: "",
+      diet: "",
+      smoking: "",
+      alcohol: "",
+      sleep: "",
+      stress: "",
     },
-    fastingStatus: labTestData.fastingStatus || "",
-    testDate: labTestData.testDate || new Date().toISOString().split("T")[0],
-    units: labTestData.units || "",
-    referenceSet: labTestData.referenceSet || "",
+    fastingStatus: "",
+    testDate: new Date().toISOString().split("T")[0],
+    units: "",
+    referenceSet: "",
   })
+
+  useEffect(() => {
+    if (user?.profile) {
+      const profile = user.profile
+      setFormData({
+        age: profile.age || "",
+        sex: profile.sex || "",
+        ethnicity: profile.ethnicity || "",
+        height: profile.height || "",
+        weight: profile.weight || "",
+        lifestyle: {
+          exercise: profile.lifestyle?.exercise || "",
+          diet: profile.lifestyle?.diet || "",
+          smoking: profile.lifestyle?.smoking || "",
+          alcohol: profile.lifestyle?.alcohol || "",
+          sleep: profile.lifestyle?.sleep || "",
+          stress: profile.lifestyle?.stress || "",
+        },
+        fastingStatus: profile.fasting_status || "",
+        testDate: new Date().toISOString().split("T")[0],
+        units: profile.units || "",
+        referenceSet: profile.reference_set || "",
+      })
+      setMedicalConditions(profile.medical_conditions || [])
+      setMedications(profile.medications || [])
+      setMeasurementSystem(profile.units === "Metric" ? "metric" : "imperial")
+    }
+  }, [user?.profile])
 
   const handleLogout = () => {
     logout()
@@ -105,11 +131,6 @@ export default function OnboardingPage() {
     }
 
     setFormData(updatedFormData)
-    updateLabTestData({
-      ...updatedFormData,
-      medicalConditions,
-      medications,
-    })
   }
 
   const handleMeasurementSystemChange = (system: string) => {
@@ -122,22 +143,12 @@ export default function OnboardingPage() {
       const updatedMedications = [...medications, newMedication.trim()]
       setMedications(updatedMedications)
       setNewMedication("")
-      updateLabTestData({
-        ...formData,
-        medicalConditions,
-        medications: updatedMedications,
-      })
     }
   }
 
   const removeMedication = (medication: string) => {
     const updatedMedications = medications.filter((m) => m !== medication)
     setMedications(updatedMedications)
-    updateLabTestData({
-      ...formData,
-      medicalConditions,
-      medications: updatedMedications,
-    })
   }
 
   const addCondition = () => {
@@ -145,33 +156,42 @@ export default function OnboardingPage() {
       const updatedConditions = [...medicalConditions, newCondition.trim()]
       setMedicalConditions(updatedConditions)
       setNewCondition("")
-      updateLabTestData({
-        ...formData,
-        medicalConditions: updatedConditions,
-        medications,
-      })
     }
   }
 
   const removeCondition = (condition: string) => {
     const updatedConditions = medicalConditions.filter((c) => c !== condition)
     setMedicalConditions(updatedConditions)
-    updateLabTestData({
-      ...formData,
-      medicalConditions: updatedConditions,
-      medications,
-    })
   }
 
   const handleConditionSelect = (condition: string) => {
     if (condition && !medicalConditions.includes(condition)) {
       const updatedConditions = [...medicalConditions, condition]
       setMedicalConditions(updatedConditions)
-      updateLabTestData({
+    }
+  }
+
+  const handleContinue = async () => {
+    if (isAuthenticated && user) {
+      const profileData = {
         ...formData,
-        medicalConditions: updatedConditions,
-        medications,
-      })
+        fasting_status: formData.fastingStatus,
+        medical_conditions: medicalConditions,
+        medications: medications,
+      }
+
+      console.log("[v0] Submitting profile update...")
+      const success = await updateProfile(profileData)
+
+      if (success) {
+        console.log("[v0] Profile updated successfully, redirecting to dashboard...")
+        router.push("/dashboard")
+      } else {
+        console.error("[v0] Failed to update profile")
+      }
+    } else {
+      // For non-authenticated users, just continue to panels
+      router.push("/panels")
     }
   }
 
@@ -606,11 +626,9 @@ export default function OnboardingPage() {
                 {isAuthenticated ? "Back to Dashboard" : "Back to Home"}
               </Link>
             </Button>
-            <Button asChild>
-              <Link href="/panels">
-                Continue
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Link>
+            <Button onClick={handleContinue}>
+              Continue
+              <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </div>
         </div>

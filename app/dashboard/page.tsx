@@ -156,9 +156,6 @@ export default function DashboardPage() {
                 Sign Out
               </Button>
             </nav>
-            <Badge variant="secondary" className="text-xs">
-              UI Mock Only
-            </Badge>
           </div>
         </div>
       </header>
