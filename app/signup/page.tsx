@@ -18,8 +18,6 @@ export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
-  const [showLoadingAnimation, setShowLoadingAnimation] = useState(false)
-  const [loadingProgress, setLoadingProgress] = useState(0)
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -30,71 +28,11 @@ export default function SignupPage() {
   const router = useRouter()
 
   useEffect(() => {
-    if (isAuthenticated && !showLoadingAnimation) {
-      setShowLoadingAnimation(true)
-
-      // Start progress animation
-      const progressInterval = setInterval(() => {
-        setLoadingProgress((prev) => {
-          if (prev >= 100) {
-            clearInterval(progressInterval)
-            router.push("/dashboard")
-            return 100
-          }
-          return prev + 2.5 // Complete in 4 seconds (100 / 2.5 = 40 intervals * 100ms = 4000ms)
-        })
-      }, 100)
-
-      // Cleanup function to prevent memory leaks
-      return () => {
-        clearInterval(progressInterval)
-      }
+    // Only redirect if user is already authenticated (e.g., they navigated here while logged in)
+    if (isAuthenticated && !success) {
+      router.push("/dashboard")
     }
-  }, [isAuthenticated, showLoadingAnimation, router])
-
-  if (showLoadingAnimation) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 flex items-center justify-center">
-        <div className="max-w-md w-full mx-auto px-4">
-          <Card className="text-center">
-            <CardContent className="pt-8 pb-8">
-              <div className="space-y-6">
-                <div className="flex justify-center">
-                  <div className="relative">
-                    <div className="w-16 h-16 border-4 border-muted rounded-full"></div>
-                    <div className="absolute top-0 left-0 w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <h3 className="text-xl font-semibold">Syncing Your Dashboard</h3>
-                  <p className="text-muted-foreground">Setting up your personalized experience...</p>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="w-full bg-muted rounded-full h-2">
-                    <div
-                      className="bg-primary h-2 rounded-full transition-all duration-100 ease-out"
-                      style={{ width: `${loadingProgress}%` }}
-                    ></div>
-                  </div>
-                  <p className="text-sm text-muted-foreground">{Math.round(loadingProgress)}% complete</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    )
-  }
+  }, [isAuthenticated, success, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -116,62 +54,22 @@ export default function SignupPage() {
     }
 
     try {
-      const success = await signup(formData.email, formData.password)
-      if (success) {
-        setSuccess(true)
-        // Don't redirect immediately - user needs to confirm email
+      console.log("[v0] Starting signup process...")
+      const signupSuccess = await signup(formData.email, formData.password)
+      console.log("[v0] Signup result:", signupSuccess)
+
+      if (signupSuccess) {
+        console.log("[v0] Signup successful, redirecting to dashboard...")
+        router.push("/dashboard")
       } else {
         setError("Failed to create account. Please try again.")
       }
     } catch (err) {
+      console.error("[v0] Signup error:", err)
       setError("An error occurred. Please try again.")
     } finally {
       setIsLoading(false)
     }
-  }
-
-  if (success) {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
-        <header className="border-b bg-card/50 backdrop-blur-sm">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Link href="/" className="flex items-center gap-2 hover:opacity-80 transition-opacity">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                    <Heart className="h-4 w-4" />
-                  </div>
-                  <span className="text-xl font-semibold text-balance">KnowMyLabs</span>
-                </Link>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        <div className="container mx-auto px-4 py-16">
-          <div className="max-w-md mx-auto">
-            <Card>
-              <CardHeader className="text-center">
-                <CardTitle className="text-2xl">Check Your Email</CardTitle>
-                <CardDescription>We've sent you a confirmation link</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <Alert>
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    Please check your email and click the confirmation link to activate your account. You can then sign
-                    in to access your dashboard.
-                  </AlertDescription>
-                </Alert>
-                <Button asChild className="w-full">
-                  <Link href="/signin">Go to Sign In</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   return (

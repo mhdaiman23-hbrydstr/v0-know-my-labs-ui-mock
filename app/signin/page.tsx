@@ -28,6 +28,13 @@ export default function SigninPage() {
 
   useEffect(() => {
     if (isAuthenticated && !syncLoading) {
+      console.log("[v0] User is authenticated, redirecting to dashboard immediately")
+      router.push("/dashboard")
+    }
+  }, [isAuthenticated, syncLoading, router])
+
+  useEffect(() => {
+    if (isAuthenticated && !syncLoading) {
       setSyncLoading(true)
       setSyncProgress(0)
 

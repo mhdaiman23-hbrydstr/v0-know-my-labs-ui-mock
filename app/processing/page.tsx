@@ -45,8 +45,8 @@ export default function ProcessingPage() {
 
     // Redirect to main dashboard page when complete (not the ID version)
     const redirectTimer = setTimeout(() => {
-      console.log("Processing complete, redirecting to main dashboard")
-      router.push('/dashboard')
+      console.log("Processing complete, redirecting to lab results")
+      router.push('/results')
     }, 5500) // Total animation time (adjust as needed)
 
     return () => {
