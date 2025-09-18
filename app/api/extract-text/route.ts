@@ -3,6 +3,9 @@ import formidable from 'formidable';
 import fs from 'fs';
 import { PDFDocument } from 'pdf-lib';
 import { getDocument, version } from 'pdfjs-dist';
+import { redactPHI } from '@/lib/redaction'; // You'll create this
+import { saveAnonymizedData, anonymizeDemographics, extractCollectionDate } from '@/lib/anonymization';
+import { extractLabMarkers } from '@/app/api/extract/extractUtils';
 
 // Configure pdf.js worker
 // In Next.js, we need to handle PDF.js differently on the server
@@ -48,10 +51,17 @@ export default async function handler(
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
+    // Extract consent from fields
+    const consentToResearch = fields.consentToResearch === 'true';
+    
+    // Extract demographics from fields (if provided)
+    const demographics = fields.demographics ? JSON.parse(fields.demographics as string) : {};
+
     console.log('[SERVER] File details:', {
       name: file.originalFilename,
       type: file.mimetype,
-      size: file.size
+      size: file.size,
+      consentToResearch
     });
 
     // Process file based on type
@@ -83,12 +93,56 @@ export default async function handler(
       // For images, we'd typically use OCR, but for this example
       // we'll just return a placeholder message
       text = 'Image OCR is coming soon. Please upload a PDF or CSV file.';
+      return res.status(400).json({ message: 'Image OCR is coming soon. Please upload a PDF or CSV file.' });
     } else {
       return res.status(400).json({ message: 'Unsupported file type' });
     }
 
-    // Return the extracted text
-    return res.status(200).json({ text });
+    // Redact PHI from text before processing
+    const redactedText = redactPHI(text);
+    
+    // Extract lab markers
+    let markers = [];
+    try {
+      markers = await extractLabMarkers(redactedText);
+      console.log('[SERVER] Successfully extracted markers:', markers.length);
+    } catch (error) {
+      console.error('Error extracting lab markers:', error);
+      // Still return the text but note the extraction failure
+      return res.status(200).json({ 
+        text: redactedText, 
+        markers: [], 
+        extractionFailed: true,
+        message: 'Text extracted but lab marker extraction failed'
+      });
+    }
+    
+    // If user consented to research, save anonymized data
+    if (consentToResearch && markers.length > 0) {
+      const collectionDate = extractCollectionDate(redactedText);
+      const anonymizedDemographics = anonymizeDemographics(demographics);
+      
+      console.log('[SERVER] Storing anonymized data with consent');
+      
+      // Save anonymized data (non-blocking)
+      saveAnonymizedData({
+        markers,
+        demographics: anonymizedDemographics,
+        source: 'upload',
+        parseMethod: file.mimetype === 'application/pdf' ? 'pdf' : 'csv',
+        collectedAt: collectionDate,
+      }).catch(err => {
+        // Log error but don't fail the request
+        console.error('Failed to save anonymized data:', err);
+      });
+    }
+
+    // Return both the redacted text and extracted markers
+    return res.status(200).json({ 
+      text: redactedText,
+      markers,
+      markerCount: markers.length
+    });
   } catch (error) {
     console.error('Error extracting text:', error);
     return res.status(500).json({ message: 'Failed to extract text from file', error: String(error) });

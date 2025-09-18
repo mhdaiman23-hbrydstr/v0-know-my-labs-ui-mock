@@ -1,8 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { convertToSI } from '../../lib/units';
+import { saveAnonymizedData, anonymizeDemographics, extractCollectionDate } from '@/lib/anonymization';
 
 // Define the interface for lab markers
-interface LabMarker {
+export interface LabMarker {
   code: string;
   name: string;
   value: number;
@@ -24,7 +25,7 @@ export default async function handler(
   }
 
   try {
-    const { redactedText } = req.body;
+    const { redactedText, consentToResearch, demographics } = req.body;
 
     if (!redactedText) {
       return res.status(400).json({ message: 'Missing redactedText parameter' });
@@ -54,6 +55,25 @@ export default async function handler(
     });
     
     console.log('[SERVER] Normalized markers:', normalizedMarkers.length);
+    
+    // If user consented to research, save anonymized data
+    if (consentToResearch) {
+      const collectionDate = extractCollectionDate(redactedText);
+      const anonymizedDemographics = anonymizeDemographics(demographics || {});
+      
+      console.log('[SERVER] Storing anonymized data with consent');
+      
+      // Save anonymized data (non-blocking)
+      saveAnonymizedData({
+        markers: normalizedMarkers,
+        demographics: anonymizedDemographics,
+        source: 'upload',
+        parseMethod: 'claude',
+        collectedAt: collectionDate,
+      }).catch(err => {
+        console.error('Failed to save anonymized data:', err);
+      });
+    }
     
     return res.status(200).json({ markers: normalizedMarkers });
   } catch (error) {

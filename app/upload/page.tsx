@@ -1,8 +1,11 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { FileUp, FileText, AlertCircle, FileType2 } from "lucide-react"
+import { Checkbox } from "@/components/ui/checkbox"
 
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
@@ -18,6 +21,7 @@ export default function LabReportUpload() {
   const [loading, setLoading] = useState(false)
   const [fileError, setFileError] = useState("")
   const [dragActive, setDragActive] = useState(false)
+  const [consentToResearch, setConsentToResearch] = useState(true)
 
   const { setExtractedLabs } = useLabTest()
 
@@ -207,9 +211,7 @@ export default function LabReportUpload() {
               <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-4">
                 <FileType2 size={40} className="text-blue-600" />
               </div>
-              <h3 className="font-semibold text-xl mb-2">
-                {fileError ? "Invalid File" : "Drop your lab report here"}
-              </h3>
+              <h3 className="font-semibold text-xl mb-2">{fileError ? "Invalid File" : "Drop your lab report here"}</h3>
               <p className="text-muted-foreground mb-4 max-w-md">
                 {fileError ? (
                   <span className="flex items-center text-red-600">
@@ -235,6 +237,27 @@ export default function LabReportUpload() {
         </div>
       </Card>
 
+      {/* Research Consent Checkbox */}
+        <div className="mt-4">
+          <div className="flex items-center space-x-2">
+            <Checkbox id="research-consent" checked={consentToResearch} onCheckedChange={setConsentToResearch} />
+            <label
+              htmlFor="research-consent"
+              className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+            >
+              I consent to my anonymized lab results being used for population health research
+            </label>
+          </div>
+          <p className="text-xs text-muted-foreground mt-1 ml-6">
+            Your privacy is protected. No personal identifiers will be stored, only anonymous lab values and general
+            demographics.
+            <span className="ml-1 text-muted-foreground font-normal">(Pre-selected for your convenience, uncheck if you prefer not to participate)</span>
+      </Label>
+      <p className="text-xs text-muted-foreground mt-1">
+          </p>
+        </div>
+      </div>
+
       {/* Privacy Callout */}
       <div className="bg-blue-50 rounded-lg p-6 border border-blue-100 mb-8 shadow-sm">
         <h3 className="font-semibold text-lg mb-2 text-blue-700">🔒 Privacy First</h3>
@@ -247,7 +270,6 @@ export default function LabReportUpload() {
           <li>We only store structured lab values, not your original document</li>
           <li>You control what information is saved</li>
         </ul>
-      </div>
 
       {/* How It Works Section */}
       <div className="bg-card rounded-lg p-6 border shadow-sm">
