@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { useLabTest } from "@/lib/lab-test-context"
-import { extractPDFText } from "@/lib/lib/pdf-processor"
 import { redactPHI } from "@/lib/redaction"
 
 export default function LabReportUpload() {
@@ -98,15 +97,44 @@ export default function LabReportUpload() {
       // Extract text based on file type
       if (file.type === "application/pdf") {
         console.log("Starting PDF text extraction...")
+
         try {
-          extractedText = await extractPDFText(file)
-          console.log(`Successfully extracted ${extractedText.length} characters from PDF`)
-        } catch (error) {
-          console.error("PDF extraction failed:", error)
+          console.log("[CLIENT] Using server-side PDF extraction...")
+
+          const formData = new FormData()
+          formData.append("file", file)
+
+          const response = await fetch("/api/extract-pdf", {
+            method: "POST",
+            body: formData,
+          })
+
+          const result = await response.json()
+
+          if (!response.ok) {
+            throw new Error(result.message || `Server extraction failed: ${response.statusText}`)
+          }
+
+          if (!result.success) {
+            toast({
+              title: "PDF Processing Not Available",
+              description: result.message || "PDF text extraction is not yet available. Please try a CSV file instead.",
+              variant: "destructive",
+            })
+            setLoading(false)
+            return
+          }
+
+          extractedText = result.text || ""
+          console.log(`[CLIENT] Server-side PDF extraction successful, length:`, extractedText.length)
+        } catch (pdfError) {
+          console.error("[CLIENT] PDF extraction failed:", pdfError)
           toast({
             title: "PDF Processing Failed",
             description:
-              "Unable to extract text from this PDF. Please try a different file or ensure the PDF contains selectable text.",
+              pdfError instanceof Error
+                ? pdfError.message
+                : "Unable to extract text from this PDF. Please try a CSV file instead.",
             variant: "destructive",
           })
           setLoading(false)
@@ -135,13 +163,6 @@ export default function LabReportUpload() {
       console.log("PHI redaction completed")
 
       console.log("Sending REAL extracted text to server for lab marker extraction...")
-
-      // Send the REAL extracted text to the simplified server endpoint
-      const formData = new FormData()
-      formData.append("text", redactedText)
-      formData.append("consentToResearch", consentToResearch.toString())
-      formData.append("filename", file.name)
-      formData.append("filetype", file.type)
 
       // Use the working llm-extract endpoint but with REAL text
       const response = await fetch("/api/llm-extract", {
@@ -339,7 +360,7 @@ export default function LabReportUpload() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+                  d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 01-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
                 />
               </svg>
             </div>
