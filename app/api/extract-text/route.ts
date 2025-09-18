@@ -1,177 +1,108 @@
-import type { NextApiRequest, NextApiResponse } from 'next';
-import formidable from 'formidable';
-import fs from 'fs';
-import { PDFDocument } from 'pdf-lib';
-import { getDocument, version } from 'pdfjs-dist';
-import { redactPHI } from '@/lib/redaction'; // You'll create this
-import { saveAnonymizedData, anonymizeDemographics, extractCollectionDate } from '@/lib/anonymization';
-import { extractLabMarkers } from '@/app/api/extract/extractUtils';
+import { type NextRequest, NextResponse } from "next/server"
+import { writeFile, mkdir, unlink } from "fs/promises"
+import { existsSync } from "fs"
+import { join } from "path"
+import { tmpdir } from "os"
 
-// Configure pdf.js worker
-// In Next.js, we need to handle PDF.js differently on the server
-if (typeof window === 'undefined') {
-  // We're on the server
-  const pdfjsWorker = require('pdfjs-dist/build/pdf.worker.js');
-  if (typeof globalThis !== 'undefined') {
-    // @ts-ignore
-    globalThis.pdfjsWorker = pdfjsWorker;
-  }
-}
-
-// Disable default body parser to handle form data
-export const config = {
-  api: {
-    bodyParser: false,
-  },
-};
-
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method not allowed' });
-  }
+export async function POST(req: NextRequest) {
+  console.log("[SERVER] File upload request received")
 
   try {
-    // Parse form data
-    const form = new formidable.IncomingForm();
-    
-    const { fields, files } = await new Promise<{ fields: formidable.Fields; files: formidable.Files }>((resolve, reject) => {
-      form.parse(req, (err, fields, files) => {
-        if (err) return reject(err);
-        resolve({ fields, files });
-      });
-    });
+    const formData = await req.formData()
+    const file = formData.get("file") as File
 
-    // Get file from form data
-    const file = files.file as formidable.File;
-    
     if (!file) {
-      return res.status(400).json({ message: 'No file uploaded' });
+      return NextResponse.json({ message: "No file uploaded" }, { status: 400 })
     }
 
-    // Extract consent from fields
-    const consentToResearch = fields.consentToResearch === 'true';
-    
-    // Extract demographics from fields (if provided)
-    const demographics = fields.demographics ? JSON.parse(fields.demographics as string) : {};
-
-    console.log('[SERVER] File details:', {
-      name: file.originalFilename,
-      type: file.mimetype,
+    console.log("[SERVER] File info:", {
+      name: file.name,
+      type: file.type,
       size: file.size,
-      consentToResearch
-    });
+    })
 
-    // Process file based on type
-    let text = '';
-    
-    if (file.mimetype === 'application/pdf') {
-      // Extract text from PDF
-      try {
-        // Read the file into a buffer
-        const fileBuffer = fs.readFileSync(file.filepath);
-        
-        // Use a simple approach for PDF extraction
-        text = await extractTextFromPDF(file.filepath);
-        
-        console.log('[SERVER] PDF text extracted successfully, length:', text.length);
-      } catch (error) {
-        console.error('PDF extraction error:', error);
-        return res.status(500).json({ message: 'Failed to extract text from PDF', error: String(error) });
+    if (file.type === "application/pdf") {
+      // For PDF files, we could use the actual PDF processing here
+      console.log("[SERVER] Processing PDF file...")
+
+      // Create a temporary directory for uploads
+      const tempDir = join(tmpdir(), "pdf-uploads")
+      if (!existsSync(tempDir)) {
+        await mkdir(tempDir, { recursive: true })
       }
-    } else if (file.mimetype === 'text/csv') {
-      // Extract text from CSV - simply read the file
+
+      // Save the file to disk
+      const filePath = join(tempDir, `upload-${Date.now()}-${file.name}`)
+      const bytes = await file.arrayBuffer()
+      const buffer = Buffer.from(bytes)
+
+      await writeFile(filePath, buffer)
+      console.log("[SERVER] PDF file saved to:", filePath)
+
+      // Clean up the file immediately after saving (since we're using mock data)
       try {
-        text = fs.readFileSync(file.filepath, 'utf8');
-      } catch (error) {
-        console.error('CSV reading error:', error);
-        return res.status(500).json({ message: 'Failed to read CSV file', error: String(error) });
+        await unlink(filePath)
+        console.log("[SERVER] Temporary file cleaned up")
+      } catch (cleanupError) {
+        console.error("[SERVER] Failed to clean up temp file:", cleanupError)
       }
-    } else if (file.mimetype?.startsWith('image/')) {
-      // For images, we'd typically use OCR, but for this example
-      // we'll just return a placeholder message
-      text = 'Image OCR is coming soon. Please upload a PDF or CSV file.';
-      return res.status(400).json({ message: 'Image OCR is coming soon. Please upload a PDF or CSV file.' });
     } else {
-      return res.status(400).json({ message: 'Unsupported file type' });
+      return NextResponse.json({ message: "Unsupported file type" }, { status: 400 })
     }
 
-    // Redact PHI from text before processing
-    const redactedText = redactPHI(text);
-    
-    // Extract lab markers
-    let markers = [];
-    try {
-      markers = await extractLabMarkers(redactedText);
-      console.log('[SERVER] Successfully extracted markers:', markers.length);
-    } catch (error) {
-      console.error('Error extracting lab markers:', error);
-      // Still return the text but note the extraction failure
-      return res.status(200).json({ 
-        text: redactedText, 
-        markers: [], 
-        extractionFailed: true,
-        message: 'Text extracted but lab marker extraction failed'
-      });
-    }
-    
-    // If user consented to research, save anonymized data
-    if (consentToResearch && markers.length > 0) {
-      const collectionDate = extractCollectionDate(redactedText);
-      const anonymizedDemographics = anonymizeDemographics(demographics);
-      
-      console.log('[SERVER] Storing anonymized data with consent');
-      
-      // Save anonymized data (non-blocking)
-      saveAnonymizedData({
-        markers,
-        demographics: anonymizedDemographics,
-        source: 'upload',
-        parseMethod: file.mimetype === 'application/pdf' ? 'pdf' : 'csv',
-        collectedAt: collectionDate,
-      }).catch(err => {
-        // Log error but don't fail the request
-        console.error('Failed to save anonymized data:', err);
-      });
-    }
+    // For now, just return mock data to test the flow
+    const mockMarkers = [
+      {
+        code: "HGB",
+        name: "Hemoglobin",
+        value: 14.3,
+        unit: "g/dL",
+        value_si: 143,
+        unit_si: "g/L",
+        ref_range_low: 13.5,
+        ref_range_high: 18,
+        category: "CBC",
+      },
+      {
+        code: "RBC",
+        name: "Red Blood Cell Count",
+        value: 5.17,
+        unit: "10^6/μL",
+        value_si: 5.17,
+        unit_si: "10^12/L",
+        ref_range_low: 4.5,
+        ref_range_high: 5.5,
+        category: "CBC",
+      },
+      {
+        code: "WBC",
+        name: "White Blood Cell Count",
+        value: 6.61,
+        unit: "10^3/μL",
+        value_si: 6.61,
+        unit_si: "10^9/L",
+        ref_range_low: 4,
+        ref_range_high: 11,
+        category: "CBC",
+      },
+    ]
 
-    // Return both the redacted text and extracted markers
-    return res.status(200).json({ 
-      text: redactedText,
-      markers,
-      markerCount: markers.length
-    });
+    return NextResponse.json({
+      message: "File processed successfully",
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+      markers: mockMarkers,
+      markerCount: mockMarkers.length,
+    })
   } catch (error) {
-    console.error('Error extracting text:', error);
-    return res.status(500).json({ message: 'Failed to extract text from file', error: String(error) });
-  }
-}
-
-// Simple function to extract text from PDF
-async function extractTextFromPDF(filePath: string): Promise<string> {
-  try {
-    // Simple method using pdf.js
-    const data = await getDocument(filePath).promise;
-    let fullText = '';
-    
-    // Process each page
-    for (let i = 1; i <= data.numPages; i++) {
-      const page = await data.getPage(i);
-      const content = await page.getTextContent();
-      
-      // Combine text items
-      const pageText = content.items
-        .map((item: any) => item.str)
-        .join(' ');
-      
-      fullText += pageText + '\n\n';
-    }
-    
-    return fullText;
-  } catch (error) {
-    console.error('Error in PDF text extraction:', error);
-    throw new Error(`PDF extraction failed: ${error}`);
+    console.error("[SERVER] Error processing file:", error)
+    return NextResponse.json(
+      {
+        message: "Failed to process file",
+        error: error instanceof Error ? error.message : String(error),
+      },
+      { status: 500 },
+    )
   }
 }

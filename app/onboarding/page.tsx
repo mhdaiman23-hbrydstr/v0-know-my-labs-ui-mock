@@ -193,10 +193,12 @@ export default function OnboardingPage() {
       const success = await updateProfile(profileData)
 
       if (success) {
-        console.log("[v0] Profile updated successfully, redirecting to dashboard...")
-        router.push("/dashboard")
+        console.log("[v0] Profile updated successfully, proceeding to panels...")
+        router.push("/panels")  // <-- Changed to /panels instead of /dashboard
       } else {
         console.error("[v0] Failed to update profile")
+        // Still proceed to panels even if profile update fails
+        router.push("/panels")
       }
     } else {
       router.push("/panels")
