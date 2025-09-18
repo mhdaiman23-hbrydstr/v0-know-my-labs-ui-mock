@@ -15,18 +15,20 @@ export async function POST(req: NextRequest) {
       consentToResearch 
     });
     
-    // Call Claude API
+    // Check OpenAI API key
+    console.log('[SERVER] OpenAI API Key present:', process.env.OPENAI_API_KEY ? 'Yes' : 'No');
+    console.log('[SERVER] OpenAI API Key length:', process.env.OPENAI_API_KEY?.length || 0);
+
+    // Call OpenAI API
     try {
-      const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
+      const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": process.env.ANTHROPIC_API_KEY || "",
-          "anthropic-version": "2023-06-01"
+          "Authorization": `Bearer ${process.env.OPENAI_API_KEY || ""}`
         },
         body: JSON.stringify({
-          model: "claude-3-opus-20240229",
-          max_tokens: 4000,
+          model: "gpt-3.5-turbo",
           messages: [
             {
               role: "system",
@@ -74,15 +76,16 @@ Return ONLY valid JSON with no other text.`
         })
       });
       
-      if (!claudeResponse.ok) {
-        console.error('[SERVER] Claude API error:', await claudeResponse.text());
-        throw new Error(`Claude API error: ${claudeResponse.status}`);
+      if (!openaiResponse.ok) {
+        console.error('[SERVER] OpenAI API error:', await openaiResponse.text());
+        throw new Error(`OpenAI API error: ${openaiResponse.status}`);
       }
       
-      const claudeData = await claudeResponse.json();
-      console.log('[SERVER] Claude API response received');
+      const openaiData = await openaiResponse.json();
+      console.log('[SERVER] OpenAI API response received');
       
-      const content = claudeData.content[0].text;
+      // Extract content from OpenAI response (different structure than Claude)
+      const content = openaiData.choices[0].message.content;
       
       // Clean up the response (remove markdown code blocks if present)
       const cleanedContent = content.replace(/```json\n?|\n?```/g, '').trim();
@@ -100,17 +103,17 @@ Return ONLY valid JSON with no other text.`
         
         return NextResponse.json({ markers });
       } catch (parseError) {
-        console.error("[SERVER] Error parsing Claude response:", parseError);
-        console.error("[SERVER] Claude response content:", cleanedContent);
+        console.error("[SERVER] Error parsing OpenAI response:", parseError);
+        console.error("[SERVER] OpenAI response content:", cleanedContent);
         return NextResponse.json(
-          { message: 'Failed to parse markers from Claude response', error: String(parseError) },
+          { message: 'Failed to parse markers from OpenAI response', error: String(parseError) },
           { status: 500 }
         );
       }
-    } catch (claudeError) {
-      console.error("[SERVER] Error calling Claude API:", claudeError);
+    } catch (apiError) {
+      console.error("[SERVER] Error calling OpenAI API:", apiError);
       return NextResponse.json(
-        { message: 'Error calling Claude API', error: String(claudeError) },
+        { message: 'Error calling OpenAI API', error: String(apiError) },
         { status: 500 }
       );
     }

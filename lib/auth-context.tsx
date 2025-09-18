@@ -57,11 +57,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
+      // Check if required environment variables are available
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+        console.warn("[v0] Supabase environment variables not found, running in offline mode")
+        setLoading(false)
+        return
+      }
+
       const client = createClient()
       setSupabase(client)
+      console.log("[v0] Supabase client created successfully")
     } catch (err) {
       console.error("[v0] Failed to create Supabase client:", err)
-      setError("Failed to initialize authentication")
+      setError("Authentication service unavailable")
       setLoading(false)
       return
     }
@@ -314,7 +322,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   if (!supabase && !error) {
+    return (
+      <AuthContext.Provider
+        value={{
+          user: null,
+          isAuthenticated: false,
+          login: async () => false,
+          signup: async () => false,
+          logout: () => {},
+          loading: false,
+          error: "Authentication service unavailable",
+          updateProfile: async () => false,
+          loadProfile: async () => {},
+        }}
+      >
+        {children}
+      </AuthContext.Provider>
+    )
+  }
+
+  if (loading) {
     return <div>Loading authentication...</div>
+  }
+
+  if (error) {
+    return <div>{error}</div>
   }
 
   return (
