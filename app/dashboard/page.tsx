@@ -6,10 +6,140 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Heart, FileText, Calendar, TrendingUp, Plus, User, LogOut, Activity, Loader2, AlertTriangle, RefreshCw } from "lucide-react"
+import {
+  Heart,
+  FileText,
+  Calendar,
+  TrendingUp,
+  Plus,
+  User,
+  LogOut,
+  Activity,
+  Loader2,
+  AlertTriangle,
+  RefreshCw,
+  Sparkles,
+} from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
+import { HealthScoreWidget } from "./components/health-score-widget"
+import { RiskAssessmentWidget } from "./components/risk-assessment-widget"
+import { LifestyleRecommendations } from "./components/lifestyle-recommendations"
+import { TrendAnalysisWidget } from "./components/trend-analysis-widget"
+
+interface AIInsights {
+  personalizedScore: {
+    overall: number
+    categories: {
+      metabolic: number
+      cardiovascular: number
+      inflammation: number
+      hormonal: number
+    }
+    explanation: string
+  }
+  riskAssessment: {
+    highRisk: string[]
+    moderateRisk: string[]
+    protectiveFactors: string[]
+  }
+  personalizedRecommendations: Array<{
+    category: "diet" | "exercise" | "lifestyle" | "medical" | "supplements"
+    priority: "high" | "medium" | "low"
+    recommendation: string
+    reasoning: string
+  }>
+  trendAnalysis: {
+    improvingMarkers: string[]
+    decliningMarkers: string[]
+    stableMarkers: string[]
+    keyInsights: string[]
+  }
+  nextSteps: Array<{
+    action: string
+    timeframe: string
+    importance: "critical" | "important" | "routine"
+  }>
+}
+
+const dummyAIInsights: AIInsights = {
+  personalizedScore: {
+    overall: 78,
+    categories: {
+      metabolic: 82,
+      cardiovascular: 75,
+      inflammation: 68,
+      hormonal: 85,
+    },
+    explanation:
+      "Your overall health score is good with strong hormonal and metabolic markers. Focus on reducing inflammation markers for optimal health.",
+  },
+  riskAssessment: {
+    highRisk: ["Elevated LDL Cholesterol", "Low Vitamin D"],
+    moderateRisk: ["Borderline HbA1c", "Slightly elevated CRP"],
+    protectiveFactors: ["Optimal HDL levels", "Good thyroid function", "Healthy B12 levels"],
+  },
+  personalizedRecommendations: [
+    {
+      category: "diet",
+      priority: "high",
+      recommendation: "Increase omega-3 rich foods like salmon, walnuts, and flaxseeds",
+      reasoning: "Your inflammation markers suggest you could benefit from anti-inflammatory foods",
+    },
+    {
+      category: "exercise",
+      priority: "high",
+      recommendation: "Add 30 minutes of moderate cardio 4-5 times per week",
+      reasoning: "Regular cardio can help improve your cardiovascular markers and reduce LDL cholesterol",
+    },
+    {
+      category: "supplements",
+      priority: "medium",
+      recommendation: "Consider Vitamin D3 supplementation (2000-4000 IU daily)",
+      reasoning: "Your Vitamin D levels are below optimal range for immune and bone health",
+    },
+    {
+      category: "lifestyle",
+      priority: "medium",
+      recommendation: "Aim for 7-9 hours of quality sleep nightly",
+      reasoning: "Better sleep can help regulate hormones and reduce inflammation",
+    },
+    {
+      category: "medical",
+      priority: "low",
+      recommendation: "Follow up with your doctor about cholesterol management",
+      reasoning: "Your LDL levels may benefit from medical evaluation",
+    },
+  ],
+  trendAnalysis: {
+    improvingMarkers: ["HDL Cholesterol", "Thyroid TSH", "Vitamin B12"],
+    decliningMarkers: ["Vitamin D", "LDL Cholesterol"],
+    stableMarkers: ["Glucose", "Total Cholesterol", "Triglycerides"],
+    keyInsights: [
+      "Your metabolic health has improved over the last 6 months",
+      "Vitamin D levels need attention - consider supplementation",
+      "Cardiovascular markers show mixed results - focus on diet and exercise",
+    ],
+  },
+  nextSteps: [
+    {
+      action: "Schedule follow-up blood work",
+      timeframe: "3 months",
+      importance: "important",
+    },
+    {
+      action: "Start Vitamin D supplementation",
+      timeframe: "Immediately",
+      importance: "important",
+    },
+    {
+      action: "Implement dietary changes",
+      timeframe: "This week",
+      importance: "critical",
+    },
+  ],
+}
 
 export default function DashboardPage() {
   const { user, isAuthenticated, logout, loading, error: authError, loadProfile } = useAuth()
@@ -17,6 +147,8 @@ export default function DashboardPage() {
   const [mounted, setMounted] = useState(false)
   const [profileLoading, setProfileLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [aiInsights] = useState<AIInsights>(dummyAIInsights)
+  const [insightsLoading, setInsightsLoading] = useState(false)
 
   useEffect(() => {
     setMounted(true)
@@ -39,10 +171,10 @@ export default function DashboardPage() {
 
   const handleLoadProfile = async () => {
     if (!loadProfile || profileLoading) return
-    
+
     setProfileLoading(true)
     setError(null)
-    
+
     try {
       await loadProfile()
       console.log("[Dashboard] Profile loaded successfully")
@@ -52,6 +184,14 @@ export default function DashboardPage() {
     } finally {
       setProfileLoading(false)
     }
+  }
+
+  const loadAIInsights = async () => {
+    setInsightsLoading(true)
+    // Simulate API delay
+    setTimeout(() => {
+      setInsightsLoading(false)
+    }, 1500)
   }
 
   const handleLogout = async () => {
@@ -168,12 +308,7 @@ export default function DashboardPage() {
             <AlertDescription>
               {error || authError}
               {error && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="ml-2"
-                  onClick={() => setError(null)}
-                >
+                <Button variant="outline" size="sm" className="ml-2 bg-transparent" onClick={() => setError(null)}>
                   Dismiss
                 </Button>
               )}
@@ -191,8 +326,40 @@ export default function DashboardPage() {
               <h1 className="text-2xl font-bold">Welcome back!</h1>
               <p className="text-muted-foreground">{userProfile.email}</p>
             </div>
+            {!isProfileIncomplete && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadAIInsights}
+                disabled={insightsLoading}
+                className="ml-auto bg-transparent"
+              >
+                <Sparkles className="h-4 w-4 mr-2" />
+                {insightsLoading ? "Generating..." : "Refresh AI Insights"}
+              </Button>
+            )}
           </div>
         </div>
+
+        {!isProfileIncomplete && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold">AI-Powered Health Insights</h2>
+            </div>
+            <div className="grid gap-6 lg:grid-cols-2 mb-8">
+              <HealthScoreWidget scoreData={aiInsights.personalizedScore} isLoading={insightsLoading} />
+              <RiskAssessmentWidget riskData={aiInsights.riskAssessment} isLoading={insightsLoading} />
+            </div>
+            <div className="grid gap-6 lg:grid-cols-2 mb-8">
+              <TrendAnalysisWidget trendData={aiInsights.trendAnalysis} isLoading={insightsLoading} />
+              <LifestyleRecommendations
+                recommendations={aiInsights.personalizedRecommendations}
+                isLoading={insightsLoading}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Quick Stats */}
         <div className="grid gap-6 md:grid-cols-4 mb-8">
@@ -224,8 +391,8 @@ export default function DashboardPage() {
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">85/100</div>
-              <Progress value={85} className="mt-2" />
+              <div className="text-2xl font-bold">{aiInsights.personalizedScore.overall}/100</div>
+              <Progress value={aiInsights.personalizedScore.overall} className="mt-2" />
             </CardContent>
           </Card>
 
@@ -339,12 +506,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="flex gap-2">
                   {!profileLoading && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={handleLoadProfile}
-                      title="Refresh profile data"
-                    >
+                    <Button variant="ghost" size="sm" onClick={handleLoadProfile} title="Refresh profile data">
                       <RefreshCw className="h-4 w-4" />
                     </Button>
                   )}
@@ -394,7 +556,7 @@ export default function DashboardPage() {
                     <span className="text-muted-foreground">Units:</span>
                     <span>{userProfile.units}</span>
                   </div>
-                  
+
                   {userProfile.ethnicity !== "Not set" && (
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Ethnicity:</span>
@@ -429,10 +591,10 @@ export default function DashboardPage() {
                   </div>
                 )}
 
-                <Button 
-                  variant={isProfileIncomplete ? "default" : "outline"} 
-                  size="sm" 
-                  className="w-full mt-4" 
+                <Button
+                  variant={isProfileIncomplete ? "default" : "outline"}
+                  size="sm"
+                  className="w-full mt-4"
                   asChild
                   disabled={profileLoading}
                 >

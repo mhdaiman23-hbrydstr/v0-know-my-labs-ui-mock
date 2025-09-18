@@ -9,6 +9,7 @@
     "start": "next start"
   },
   "dependencies": {
+    "@ai-sdk/openai": "latest",
     "@anthropic-ai/sdk": "^0.x.x",
     "@auth/core": "latest",
     "@emotion/is-prop-valid": "latest",
@@ -43,6 +44,7 @@
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "latest",
     "@vercel/analytics": "latest",
+    "ai": "latest",
     "autoprefixer": "^10.4.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -68,7 +70,7 @@
     "pdf-lib": "latest",
     "pdf-parse": "latest",
     "pdf.js-extract": "latest",
-    "pdfjs-dist": "^3.11.174",
+    "pdfjs-dist": "latest",
     "react": "^18",
     "react-day-picker": "latest",
     "react-dom": "^18",

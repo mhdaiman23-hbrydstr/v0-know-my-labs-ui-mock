@@ -109,7 +109,15 @@ export default function LabReportUpload() {
             body: formData,
           })
 
-          const result = await response.json()
+          let result
+          try {
+            result = await response.json()
+          } catch (jsonError) {
+            // If JSON parsing fails, get the text response to see what went wrong
+            const textResponse = await response.text()
+            console.error("[CLIENT] Failed to parse JSON response:", textResponse)
+            throw new Error(`Server returned invalid response: ${textResponse.substring(0, 100)}...`)
+          }
 
           if (!response.ok) {
             throw new Error(result.message || `Server extraction failed: ${response.statusText}`)
