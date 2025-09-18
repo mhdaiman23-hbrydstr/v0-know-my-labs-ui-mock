@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import { useLabTest } from "@/lib/lab-test-context"
+import { extractPDFText } from "@/lib/lib/pdf-processor"
+import { redactPHI } from "@/lib/redaction"
 
 export default function LabReportUpload() {
   const router = useRouter()
@@ -81,7 +83,6 @@ export default function LabReportUpload() {
     }
   }
 
-  // FIXED: Process the uploaded file with actual PDF extraction
   const processFile = async () => {
     if (!file) {
       setFileError("Please select a file to upload.")
@@ -92,48 +93,80 @@ export default function LabReportUpload() {
     console.log(`Processing file: ${file.name} (${file.type})`)
 
     try {
-      // IMPORTANT: Send the file directly to extract-text endpoint
+      let extractedText = ""
+
+      // Extract text based on file type
+      if (file.type === "application/pdf") {
+        console.log("Starting PDF text extraction...")
+        try {
+          extractedText = await extractPDFText(file)
+          console.log(`Successfully extracted ${extractedText.length} characters from PDF`)
+        } catch (error) {
+          console.error("PDF extraction failed:", error)
+          toast({
+            title: "PDF Processing Failed",
+            description:
+              "Unable to extract text from this PDF. Please try a different file or ensure the PDF contains selectable text.",
+            variant: "destructive",
+          })
+          setLoading(false)
+          return
+        }
+      } else if (file.type === "text/csv") {
+        console.log("Reading CSV file...")
+        extractedText = await file.text()
+        console.log(`Successfully read ${extractedText.length} characters from CSV`)
+      } else if (file.type.startsWith("image/")) {
+        toast({
+          title: "Image OCR Coming Soon",
+          description: "Please upload a PDF or CSV file for now.",
+          variant: "destructive",
+        })
+        setLoading(false)
+        return
+      }
+
+      if (!extractedText || extractedText.trim().length === 0) {
+        throw new Error("No text could be extracted from the file")
+      }
+
+      console.log("Redacting PHI from extracted text...")
+      const redactedText = redactPHI(extractedText)
+      console.log("PHI redaction completed")
+
+      console.log("Sending REAL extracted text to server for lab marker extraction...")
+
+      // Send the REAL extracted text to the simplified server endpoint
       const formData = new FormData()
-      formData.append("file", file) // Send the actual file
+      formData.append("text", redactedText)
       formData.append("consentToResearch", consentToResearch.toString())
+      formData.append("filename", file.name)
+      formData.append("filetype", file.type)
 
-      console.log("Sending file to server for extraction...")
-
-      // CRITICAL CHANGE: Use extract-text endpoint, not llm-extract
-      const response = await fetch("/api/extract-text", {
+      // Use the working llm-extract endpoint but with REAL text
+      const response = await fetch("/api/llm-extract", {
         method: "POST",
-        body: formData,
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          redactedText: redactedText,
+          consentToResearch: consentToResearch,
+          demographics: {},
+        }),
       })
 
       if (!response.ok) {
-        let errorMessage = "Failed to process file"
-        try {
-          const errorData = await response.json()
-          errorMessage = errorData.message || errorMessage
-        } catch (jsonError) {
-          // If response is not JSON, try to get text content
-          try {
-            const errorText = await response.text()
-            errorMessage = errorText || `Server error: ${response.status}`
-          } catch (textError) {
-            errorMessage = `Server error: ${response.status} ${response.statusText}`
-          }
-        }
-        throw new Error(errorMessage)
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Failed to process file")
       }
 
-      let result
-      try {
-        result = await response.json()
-      } catch (jsonError) {
-        console.error("Error parsing response JSON:", jsonError)
-        throw new Error("Server returned invalid response format")
-      }
+      const result = await response.json()
 
       console.log(`Server response:`, result)
       console.log(`Successfully extracted ${result.markers?.length || 0} lab markers`)
 
-      // Use markers from extract-text response
+      // Use markers from the response
       if (result.markers && result.markers.length > 0) {
         setExtractedLabs(result.markers)
 
