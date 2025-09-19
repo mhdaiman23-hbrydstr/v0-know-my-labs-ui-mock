@@ -261,11 +261,11 @@ export default function LabReportUpload() {
           </div>
         </div>
 
-        <Card className="p-8 mb-8 border-t-4 border-t-blue-500 shadow-lg">
+        <Card className="p-8 mb-8 border-t-4 border-t-primary shadow-lg">
           {/* File Upload Area */}
           <div
             className={`border-2 border-dashed rounded-lg p-8 mb-6 text-center transition-colors
-              ${dragActive ? "border-blue-500 bg-blue-50" : "border-border"}
+              ${dragActive ? "border-primary bg-primary/5" : "border-border"}
               ${fileError ? "border-red-500 bg-red-50" : ""}`}
             onDragEnter={handleDrag}
             onDragOver={handleDrag}
@@ -283,8 +283,8 @@ export default function LabReportUpload() {
             {file ? (
               // File selected state
               <div className="flex flex-col items-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-                  <FileText size={32} className="text-blue-600" />
+                <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                  <FileText size={32} className="text-primary" />
                 </div>
                 <h3 className="font-semibold text-lg mb-1">{file.name}</h3>
                 <p className="text-muted-foreground text-sm mb-4">{(file.size / 1024).toFixed(2)} KB</p>
@@ -300,8 +300,8 @@ export default function LabReportUpload() {
             ) : (
               // No file selected state
               <div className="flex flex-col items-center">
-                <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-                  <FileType2 size={40} className="text-blue-600" />
+                <div className="w-20 h-20 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                  <FileType2 size={40} className="text-primary" />
                 </div>
                 <h3 className="font-semibold text-xl mb-2">
                   {fileError ? "Invalid File" : "Drop your lab report here"}
@@ -331,7 +331,7 @@ export default function LabReportUpload() {
           </div>
 
           {/* Research Consent */}
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="mt-6 p-4 bg-primary/5 rounded-lg border border-primary/20">
             <div className="flex items-start space-x-3">
               <Checkbox
                 id="research-consent"
@@ -355,8 +355,8 @@ export default function LabReportUpload() {
         {/* How It Works */}
         <div className="grid md:grid-cols-3 gap-6 mb-8">
           <div className="text-center">
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <FileUp size={24} className="text-blue-600" />
+            <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-3">
+              <FileUp size={24} className="text-primary" />
             </div>
             <h3 className="font-semibold mb-2">1. Upload</h3>
             <p className="text-sm text-muted-foreground">Upload your PDF lab report securely</p>

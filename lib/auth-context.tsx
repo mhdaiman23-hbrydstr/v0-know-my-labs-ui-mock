@@ -321,34 +321,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  if (!supabase && !error) {
-    return (
-      <AuthContext.Provider
-        value={{
-          user: null,
-          isAuthenticated: false,
-          login: async () => false,
-          signup: async () => false,
-          logout: () => {},
-          loading: false,
-          error: "Authentication service unavailable",
-          updateProfile: async () => false,
-          loadProfile: async () => {},
-        }}
-      >
-        {children}
-      </AuthContext.Provider>
-    )
-  }
-
-  if (loading) {
-    return <div>Loading authentication...</div>
-  }
-
-  if (error) {
-    return <div>{error}</div>
-  }
-
   return (
     <AuthContext.Provider
       value={{
